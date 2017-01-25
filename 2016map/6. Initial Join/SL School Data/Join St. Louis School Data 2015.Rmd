@@ -1,0 +1,50 @@
+---
+title: "Join St. Louis School Data 2015"
+author: "Ibuki Ogasawara"
+date: "May 18, 2016"
+output: html_document
+---
+
+This R markdown file joins the school data in St. Louis that is for 2015 by subsetting and merging the cleaned datasets in "Initial Clean Data" folder
+```{r}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr) #filter, select
+```
+
+####1. Read Datasets
+```{r}
+SLED_Demographic <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/St. Louis/SLED_Demographic_Cleaned.csv")
+SLED_DISC_INCI <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/St. Louis/SLED_Discipline_Incident_Cleaned.csv")
+SLED_GRAD_ACT <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/St. Louis/SLED_Graduation_Rate_ACT_Cleaned.csv")
+SLED_ACAD_PERF <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/St. Louis/SLED_Academic_Peformance_2015_Cleaned.csv")
+```
+
+####2. Filter the Datasets by the Year (2015)
+```{r}
+Demo_2015 <- filter(SLED_Demographic, Year=="2015")
+Disc_2015 <- filter(SLED_DISC_INCI, Year=="2015")
+Grad_2015 <- filter(SLED_GRAD_ACT, Year=="2015")
+#Academic performance dataset is only for 2015, so we do not have to subset.
+```
+
+####3. Choose the Columns
+```{r}
+Demo_2015_Selected <- select(Demo_2015, SchNum, Asian, Black, Hispanic, Indian, White, FTE, Total)
+Disc_2015_Selected <- select(Disc_2015, SchNum, TotalIncident, DrugNum, SuspensionNum)
+Grad_2015_Selected <- select(Grad_2015, SchNum, GradNum, GradAboveNatAve, PercentTested, ACTScore)
+Acad_2015_Selected <- select(SLED_ACAD_PERF, SchNum, EngAc, EngRe, EngBB, EngBa, EngPr, EngAd, EngMS, MatAc, MatRe, MatBB, MatBa ,MatPr, MatAd, MatMS, SciAc, SciRe, SciBB, SciBa, SciPr, SciAd, SciMS)
+```
+
+####4. Merge the Datasets
+```{r}
+#Now, we merge the tables and the shapefile one by one
+SL_SCH_2015_1 <- full_join(Demo_2015_Selected, Disc_2015_Selected, by='SchNum')
+SL_SCH_2015_2 <- full_join(SL_SCH_2015_1, Acad_2015_Selected, by='SchNum')
+SL_SCH_2015_3 <- full_join(SL_SCH_2015_2, Grad_2015_Selected, by='SchNum')
+
+names(SL_SCH_2015_3) <- c("SchNum","Asian","Black","Hispanc","Indian","White","FTE","Total","TtlIncd","DrugNum","SspnsnN","EngAc","EngRe","EngBB","EngBa","EngPr","EngAd","EngMS","MatAc","MatRe","MatBB","MatBa","MatPr","MatAd","MatMS","SciAc","SciRe","SciBB","SciBa","SciPr","SciAd","SciMS","GradNum","GrdAbNA","PrcntTs","ACTScor")
+
+write.csv(SL_SCH_2015_3, "SL_School_Data_2015.csv")
+```
+
+

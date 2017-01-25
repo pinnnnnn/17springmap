@@ -1,0 +1,131 @@
+---
+title: "Clean St. Louis Public Schools Discipline Incident"
+author: "Ibuki Ogasawara"
+date: "February 25, 2016"
+output: html_document
+---
+This R markdown file cleans the datasets of discipline incidents in St. Louis public school from 2008 to 2015. Before running the code, some initial steps are required. (See footnotes.)  
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(RCurl))install.packages("RCurl")
+library(RCurl) #getURL(download datasets from a website)
+if(!require(dplyr))install.packages("dplyr")
+library(dplyr) #arrange, select
+```
+
+####1. Download and Read Datasets from GitHub
+```{r}
+mydata1 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/SLED_Discipline_Incidents/SLED_Total_Incidents.csv")
+Total_Incidents <- read.csv(text = mydata1, quote = "")
+mydata2 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/SLED_Discipline_Incidents/Drug_Incident_Rate.csv")
+Drug <- read.csv(text = mydata2, quote = "")
+mydata3 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/SLED_Discipline_Incidents/Violence_Rate.csv")
+Violence <- read.csv(text = mydata3, quote = "")
+mydata4 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/SLED_Discipline_Incidents/Weapon_Indident_Rate.csv")
+Weapon <- read.csv(text = mydata4, quote = "")
+mydata5 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/SLED_Discipline_Incidents/Out_of_School_Suspension_Rate.csv")
+Suspension <- read.csv(text = mydata5, quote = "")
+
+#Rename the columns
+names(Total_Incidents) <- c("X", "School", "Year", "Enrollment", "TotalIncident")
+names(Drug) <- c("School", "Year", "DrugRate")
+names(Violence) <- c("School", "Year", "ViolenceRate")
+names(Weapon) <- c("School", "Year", "WeaponRate")
+names(Suspension) <- c("School", "Year", "SuspensionRate")
+```
+
+####3. Arrange Total Incidents Data Frame
+We arrange "Total_Incidents" by "Name" alphabetically since only this dataset is ordered differently from others. 
+```{r}
+Total_Arranged <- arrange(Total_Incidents, School)
+```
+
+####4. Join All the Data Frames
+We take "School" and "Year" column from "Total_Arrange," and for other data frames, we only take ones that are only necessary.  
+```{r}
+Total_INCI <- Total_Arranged[,c(2:5)]
+Drug_INCI <- as.data.frame(Drug[,3])
+Violence_INCI <- as.data.frame(Violence[,3])
+Weapon_INCI <- as.data.frame(Weapon[,3])
+Suspension_INCI <- as.data.frame(Suspension[,3])
+#Check dimentions
+sapply(list(Total_INCI, Drug_INCI, Violence_INCI, Weapon_INCI, Suspension_INCI), dim) 
+DISC_INCI <- cbind.data.frame(Total_INCI, Drug_INCI, Violence_INCI, Weapon_INCI, Suspension_INCI)
+#Rename the columns
+names(DISC_INCI) <- c("School", "Year", "Enrollment", "TotalIncident",
+                      "DrugRate", "ViolenceRate", "WeaponRate", "SuspensionRate")
+```
+
+####5. Assign School Number
+We will assign school number to each school by extracting the nubmers in the parentheses in the "School" column. 
+```{r}
+#Function that extracts the 6th last character through 3rd last character of characters. 
+substrRight_2 <- function(x){
+  substr(x, nchar(x)-5, nchar(x)-2)
+}
+#Apply the function and convert the output into numeric
+DISC_INCI$SchNum <- as.numeric(substrRight_2(as.character(DISC_INCI$School)))
+```
+
+####6. Delete Missing Rows
+Now, we delete the row with all "NA"s. They are missing either because the school had been closed or had not yet been opened.
+```{r}
+#Check if each column for sure has the same number of non-NA cells
+sapply(list(table(DISC_INCI$TotalIncident), table(DISC_INCI$Year), table(DISC_INCI$Enrollment), table(DISC_INCI$DrugRate), table(DISC_INCI$ViolenceRate), table(DISC_INCI$WeaponRate), table(DISC_INCI$SuspensionRate)), sum)
+
+DISC_Reduced <- DISC_INCI[complete.cases(DISC_INCI),]
+
+sapply(list(table(DISC_Reduced$TotalIncident), table(DISC_Reduced$Year), table(DISC_Reduced$Enrollment), table(DISC_Reduced$DrugRate), table(DISC_Reduced$ViolenceRate), table(DISC_Reduced$WeaponRate), table(DISC_Reduced$SuspensionRate)), sum)
+
+#One of the rows has been missed because it has NAs in it even though the total number of incident is indicated.
+#We add the row: 456th "LONG MIDDLE COMMUNITY ED. CTR. (3260)" 2015 column into where it is supposed to be. 
+missed_row <- DISC_INCI[456, ]
+DISC_Complete <- rbind(DISC_Reduced, missed_row)
+```
+
+####7. Compute Number of Incidents
+Since four of the columns are the incidnet rates (percentage), we compute the number of occurance based on "Enrollment". 
+```{r}
+DISC_Complete$DrugNum <- DISC_Complete$DrugRate*DISC_Complete$Enrollment/100
+DISC_Complete$ViolenceNum <- DISC_Complete$ViolenceRate*DISC_Complete$Enrollment/100
+DISC_Complete$WeaponNum <- DISC_Complete$WeaponRate*DISC_Complete$Enrollment/100
+DISC_Complete$SuspensionNum <- DISC_Complete$SuspensionRate*DISC_Complete$Enrollment/100
+```
+
+####8. Select Columns
+Finally, we will extract the columns that we need and arrange it by the "SchNum"  
+We do not use "ViolenceNum" and "WeaponNum" since there are so many missing cells. 
+```{r}
+DISC_INCI_Select <- dplyr::select(DISC_Complete, SchNum, Year, TotalIncident, DrugNum, SuspensionNum)
+DISC_INCI_Final <- arrange(DISC_INCI_Select, SchNum)
+```
+####9. Save the data frame
+```{r}
+write.csv(DISC_INCI_Final, "SLED_Discipline_Incident_Cleaned.csv")
+```
+
+#### Footnote:
+The original data source: Missouri Department of Elementary & Secondary Education   
+http://mcds.dese.mo.gov/quickfacts/SitePages/DistrictInfo.aspx?ID=__bk8100130013005300130013005300  
+
+Click under "ST. LOUIS CITY -- Performance Data", "Discipline Incidents" - "Building"  
+
+Initial cleaning process:  
+1. In Excel, deleted commas in one the school names (EARL NANCE, SR. ELEM. (5610))  
+2. In Excel, deleted columns that indicate the graduation rate by race   
+3. Import the "Total Discipline Incident" dataset into Rstudio and deleted commas in the column "ENROLLMENT" by
+```{r eval=FALSE}
+Enroll <- Total_Incidents$ENROLLMENT
+enroll.cha <- as.character(Enroll)
+enroll.num <- as.numeric(gsub(",", "", enroll.cha))
+Total_Incidents$ENROLLMENT <- enroll.num
+write.csv(Total_Incidents, "SLED_Total_Incidents.csv")
+```
+
+
+
+
+
+
+

@@ -1,0 +1,261 @@
+---
+title: "Clean St. Louis Police Department Crime Data"
+author: "Ibuki Ogasawara"
+date: "February 8, 2016"
+output: html_document
+---
+
+This R markdown file cleans the datasets of crime record of St. Louis City from 2008 to 2015. Before running the code, some initial steps are required. (See footnotes.) 
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(RCurl))install.packages("RCurl")
+library(RCurl) #getURL(download datasets from a website)
+if(!require(dplyr))install.packages("dplyr")
+library(dplyr) #summarize, arrange, select, filter
+```
+
+####1. Download, Read, and Rename Datasets from GitHub
+```{r message=FALSE}
+mydata15 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/St.%20Louis%20Crime%20Data/SLPD2015.csv")
+St_Louis_2015 <- read.csv(text = mydata15, quote = "")
+
+mydata14 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/St.%20Louis%20Crime%20Data/SLPD2014.csv")
+St_Louis_2014 <- read.csv(text = mydata14, quote = "")
+
+mydata13 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/St.%20Louis%20Crime%20Data/SLPD2013.csv")
+St_Louis_2013 <- read.csv(text = mydata13, quote = "")
+
+mydata12 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/St.%20Louis%20Crime%20Data/SLPD2012.csv")
+St_Louis_2012 <- read.csv(text = mydata12, quote = "")
+
+mydata11 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/St.%20Louis%20Crime%20Data/SLPD2011.csv")
+St_Louis_2011 <- read.csv(text = mydata11, quote = "")
+
+mydata10 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/St.%20Louis%20Crime%20Data/SLPD2010.csv")
+St_Louis_2010 <- read.csv(text = mydata10, quote = "")
+
+mydata9 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/St.%20Louis%20Crime%20Data/SLPD2009.csv")
+St_Louis_2009 <- read.csv(text = mydata9, quote = "")
+
+mydata8 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/St.%20Louis%20Crime%20Data/SLPD2008.csv")
+St_Louis_2008 <- read.csv(text = mydata8, quote = "")
+
+#Rename the columns
+names(St_Louis_2015) <- c("Year", "DateOccur", "Count", "Crime",
+                          "District", "Neighborhood", "XCoord", "YCoord")
+names(St_Louis_2014) <- c("Year", "DateOccur", "Count", "Crime",
+                          "District", "Neighborhood", "XCoord", "YCoord")
+names(St_Louis_2013) <- c("Year", "DateOccur", "Count", "Crime", "District",
+                          "Neighborhood", "XCoord", "YCoord")
+names(St_Louis_2012) <- c("Year", "DateOccur", "Count", "Crime",
+                          "District", "Neighborhood", "XCoord", "YCoord")
+names(St_Louis_2011) <- c("Year", "DateOccur", "Count", "Crime",
+                          "District", "Neighborhood", "XCoord", "YCoord")
+names(St_Louis_2010) <- c("Year", "DateOccur", "Count", "Crime",
+                          "District", "Neighborhood", "XCoord", "YCoord")
+names(St_Louis_2009) <- c("Year", "DateOccur", "Count", "Crime",
+                          "District", "Neighborhood", "XCoord", "YCoord")
+names(St_Louis_2008) <- c("Year", "DateOccur", "Count", "Crime",
+                          "District", "Neighborhood", "XCoord", "YCoord")
+
+#Check the dimention of each table. 
+sapply(list(St_Louis_2015, St_Louis_2014, St_Louis_2013, St_Louis_2012, St_Louis_2011, St_Louis_2010, St_Louis_2009, St_Louis_2008), dim)
+
+#Create a year column to each table.
+St_Louis_2015$Year <- rep(2015, 51235)
+St_Louis_2014$Year <- rep(2014, 47876)
+St_Louis_2013$Year <- rep(2013, 51970)
+St_Louis_2012$Year <- rep(2012, 53387)
+St_Louis_2011$Year <- rep(2011, 55247)
+St_Louis_2010$Year <- rep(2010, 57829)
+St_Louis_2009$Year <- rep(2009, 63046)
+St_Louis_2008$Year <- rep(2008, 68410)
+```
+
+####2. Join the Data Frames
+Now, we will combine the datasets into one dataset. 
+```{r}
+St_Louis <- rbind.data.frame(St_Louis_2015, St_Louis_2014, St_Louis_2013, St_Louis_2012, St_Louis_2011, St_Louis_2010, St_Louis_2009, St_Louis_2008)
+```
+
+####3. Delete Non-Criminal Incidents
+When the "count" is -1, that means that the original crime reported for that complaint number was NOT indeed a crime. Therefore, we delete the rows with "count"=-1.
+```{r message=FALSE}
+table(St_Louis$Count)
+St_Louis_Filtered <- filter(St_Louis, St_Louis$Count == 1)
+```
+
+####4. Create Crime ID
+Now, we sort the dataset by the crime type and create a column called "crimeID" to simplify the column, "crime".   
+There are 24 crime groups, and they are:  
+1: Homicide / 2: Rape / 3: Robbery / 4: Aggravated Assault / 5: Burglary / 6: Larceny / 7: Vehicle Theft / 8: Arson / 9: Simple Assault / 10: Forgery / 11: Fraud / 12: Embezzlement / 13: Stolen Property / 14: Destruction of Property / 15: Weapons Offense / 16: Prostitution / 17: Sex Offense / 18: VMCSL / 19: Offense Against Family / 20: DWI,DUI / 21: Liquor Laws / 22: Disorderly Conduct / 23: Loitering, Begging / 24: Other Crimes.
+```{r}
+St_Louis_Filtered$crimeID[St_Louis_Filtered$Crime < 20000] <- 1
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 20000)
+                          &  (St_Louis_Filtered$Crime < 30000)] <- 2
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 30000)
+                          &  (St_Louis_Filtered$Crime < 40000)] <- 3
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 40000)
+                          &  (St_Louis_Filtered$Crime < 50000)] <- 4
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 50000)
+                          &  (St_Louis_Filtered$Crime < 60000)] <- 5
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 60000)
+                          &  (St_Louis_Filtered$Crime < 70000)] <- 6
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 70000)
+                          &  (St_Louis_Filtered$Crime < 80000)] <- 7
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 80000)
+                          &  (St_Louis_Filtered$Crime < 90000)] <- 8
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 90000)
+                          &  (St_Louis_Filtered$Crime < 100000)] <- 9
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 100000)
+                          &  (St_Louis_Filtered$Crime < 110000)] <- 10
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 110000)
+                          &  (St_Louis_Filtered$Crime < 120000)] <- 11
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 120000)
+                          &  (St_Louis_Filtered$Crime < 130000)] <- 12
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 130000)
+                          &  (St_Louis_Filtered$Crime < 140000)] <- 13
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 140000)
+                          &  (St_Louis_Filtered$Crime < 150000)] <- 14
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 150000)
+                          &  (St_Louis_Filtered$Crime < 160000)] <- 15
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 160000)
+                          &  (St_Louis_Filtered$Crime < 170000)] <- 16
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 170000)
+                          &  (St_Louis_Filtered$Crime < 180000)] <- 17
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 180000)
+                          &  (St_Louis_Filtered$Crime < 190000)] <- 18
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 200000)
+                          &  (St_Louis_Filtered$Crime < 210000)] <- 19 #(20)
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 210000)
+                          &  (St_Louis_Filtered$Crime < 220000)] <- 20 #(21)
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 220000)
+                          &  (St_Louis_Filtered$Crime < 230000)] <- 21 #(22)
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 240000)
+                          &  (St_Louis_Filtered$Crime < 250000)] <- 22 #(24)
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 250000)
+                          &  (St_Louis_Filtered$Crime < 260000)] <- 23 #(25)
+St_Louis_Filtered$crimeID[(St_Louis_Filtered$Crime >= 260000)
+                          |  ((St_Louis_Filtered$Crime >=190000)
+                              & (St_Louis_Filtered$Crime < 200000))
+                          | ((St_Louis_Filtered$Crime >=230000)
+                             &(St_Louis_Filtered$Crime < 240000))] <- 24 #(26)
+```
+
+####5. Consolidate Crime Types
+Consolidate the crime types into 7 different category:  
+1: Homicide (1: Homicide)  
+2: Assault (4: Aggravated Assault, 9:Simple Assault, 19:Offense against family)  
+3: Sex Offense (2:Rape, 17:Sex Offense)  
+4: Contraband (15: Weapons Offense, 16: Prostitution, 18: VMCSL, 21: Liquor Laws)  
+5: Larceny (3:Robbery, 5:Burglary, 6:Larceny, 7:Vehicle Theft, 13:Stolen Property)  
+6: Vandalism (8:Arson, 14:Destruction of Property)  
+7: Other (20:DWI, DUI, 10: Forgery, 11: Fraud, 12: Embezzlement, 22: Disorderly Conduct, 23: Loitering, Begging, 24: Other Crimes)
+```{r}
+St_Louis_Filtered$CrimeType[St_Louis_Filtered$crimeID==1] <- "Homicide"
+St_Louis_Filtered$CrimeType[St_Louis_Filtered$crimeID==4
+                            | St_Louis_Filtered$crimeID==9
+                            | St_Louis_Filtered$crimeID==19] <- "Assault"
+St_Louis_Filtered$CrimeType[St_Louis_Filtered$crimeID==2
+                            | St_Louis_Filtered$crimeID==17] <- "Sex Offense"
+St_Louis_Filtered$CrimeType[St_Louis_Filtered$crimeID==15
+                            | St_Louis_Filtered$crimeID==16
+                            | St_Louis_Filtered$crimeID==18
+                            | St_Louis_Filtered$crimeID==21] <- "Contraband"
+St_Louis_Filtered$CrimeType[St_Louis_Filtered$crimeID==3
+                            | St_Louis_Filtered$crimeID==5
+                            | St_Louis_Filtered$crimeID==6
+                            | St_Louis_Filtered$crimeID==7
+                            | St_Louis_Filtered$crimeID==13] <- "Larceny"
+St_Louis_Filtered$CrimeType[St_Louis_Filtered$crimeID==8
+                            | St_Louis_Filtered$crimeID==14] <- "Vandalism"
+St_Louis_Filtered$CrimeType[St_Louis_Filtered$crimeID==10
+                            | St_Louis_Filtered$crimeID==11
+                            | St_Louis_Filtered$crimeID==12
+                            | St_Louis_Filtered$crimeID==20
+                            | St_Louis_Filtered$crimeID==22
+                            | St_Louis_Filtered$crimeID==23
+                            | St_Louis_Filtered$crimeID==24] <- "Other Crimes"
+```
+
+####5. Create Binary Columns for Crime Types
+Create 6 other columns of dummy variables with crime types.
+```{r}
+St_Louis_Dummies <- mutate(St_Louis_Filtered, 
+                    Homicide = as.numeric(St_Louis_Filtered$CrimeType=="Homicide"), 
+                    Assault = as.numeric(St_Louis_Filtered$CrimeType=="Assault"),
+                    Sex_Offense = as.numeric(St_Louis_Filtered$CrimeType=="Sex Offense"),
+                    Contraband = as.numeric(St_Louis_Filtered$CrimeType=="Contraband"),
+                    Larceny = as.numeric(St_Louis_Filtered$CrimeType=="Larceny"),
+                    Vandalism = as.numeric(St_Louis_Filtered$CrimeType=="Vandalism"),
+                    Others = as.numeric(St_Louis_Filtered$CrimeType=="Other Crimes"))
+
+```
+
+####6. Count the Number of Crimes
+Count the number of each crime type in each neighborhood. 
+```{r}
+#Columns we want to group by
+grp_cols <- names(St_Louis_Dummies)[c(1, 6)] #Select "Year" and "District"
+#Convert character vector to list of symbols
+dots <- lapply(grp_cols, as.symbol)
+
+Total_counts <- St_Louis_Dummies %>%
+        group_by_(.dots=dots) %>%
+        summarise("CrimeType" = length(CrimeType))
+Homi_counts <- St_Louis_Dummies %>% 
+        group_by_(.dots=dots) %>%
+        summarise("Homicide" = sum(Homicide))
+Asl_counts <- St_Louis_Dummies %>% 
+        group_by_(.dots=dots) %>%
+        summarise("Assault" = sum(Assault))
+Sex_counts <- St_Louis_Dummies %>% 
+        group_by_(.dots=dots) %>%
+        summarise("Sex_Offense" = sum(Sex_Offense))
+Cont_counts <- St_Louis_Dummies %>% 
+        group_by_(.dots=dots) %>%
+        summarise("Contraband" = sum(Contraband))
+Larc_counts <- St_Louis_Dummies %>% 
+        group_by_(.dots=dots) %>%
+        summarise("Larceny" = sum(Larceny))
+Vand_counts <- St_Louis_Dummies %>% 
+        group_by_(.dots=dots) %>%
+        summarise("Vandalism" = sum(Vandalism))
+Oth_counts <- St_Louis_Dummies %>% 
+        group_by_(.dots=dots) %>%
+        summarise("Other Crimes" = sum(Others))
+```
+
+####7. Join the Resutls
+Create data frame with the counts of each crime type
+```{r}
+St_Louis_Cleaned <- data.frame("Year"=Total_counts[,1],
+                                    "NHD_NUM"=Total_counts[,2],
+                                    "Homicide"=Homi_counts[,3],
+                                    "Assault"=Asl_counts[,3],
+                                    "Sex Offense"=Sex_counts[,3],
+                                    "Contraband"=Cont_counts[,3],
+                                    "Larceny"=Larc_counts[,3],
+                                    "Vandalism"=Vand_counts[,3],
+                                    "Other_Crimes"=Oth_counts[,3],
+                                    "Total"=Total_counts[,3])
+names(St_Louis_Cleaned) <- c("Year","NHD_NUM","Homicide","Assault","SexOffense","Contraband","Larceny","Vandalism","Others","Total" )
+```
+
+####8. Save the Data Frame
+```{r}
+write.csv(St_Louis_Cleaned, "SLPD_Cleaned.csv")
+```
+
+#### Footnote:
+
+Data Source: St. Louis Metropolitan Police Department  
+http://www.slmpd.org/Crimereports.shtml
+
+Initial Clean:  
+The datasets were separated by month and year. We combined them to each year. 
+In Excel, we also removed the columns that we do not need for our analysis. 
+
+They are:  
+X, Complaint, CodedMonth, FlagCrime, FlagUnfounded, FlagAdministrative, FlagCleanup, ILEADSAddress, ILEADSStreet, LocationName, LocationComment, CADAddress, CADStreet.

@@ -1,0 +1,166 @@
+---
+title: "Clean New York City Public Schools Graduation Rate"
+author: "Ibuki Ogasawara"
+date: "March 10, 2016"
+output: html_document
+---
+This R markdown file cleans the datasets of demographics of New York City public schools from 2011 to 2015. Before running the code, some initial steps are required. (See footnotes.) 
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(RCurl))install.packages("RCurl")
+library(RCurl) #getURL(download datasets from a website)
+if(!require(dplyr))install.packages("dplyr")
+library(dplyr) #summarize, arrange, select, filter
+```
+
+
+####1. Download and Read Dataset from GitHub 
+```{r message=FALSE}
+mydata <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/NYC%20Graduation%20Rate/NYED_Grad_Results.csv")
+NYED_GRAD <- read.csv(text = mydata, quote = "")
+```
+
+####2. Reduce Columns
+Omit all the "percentage" columns. 
+```{r message=FALSE}
+#Rename columns
+names(NYED_GRAD)
+names(NYED_GRAD) <- c("X", "DBN", "School", "CohortYear", "Category", "Total", "Total_Grad", "Total_Grad_Pct", "All_Regents", "All_Regents_Pct_C", "All_Regents_Pct_G", "Adv_Regents", "Adv_Regents_Pct_C", "Adv_Regents_Pct_G", "Regents_wo_Advanced", "Regents_wo_Advanced_Pct_C", "Regents_wo_Advanced_Pct_G", "Local", "Local_Pct_C", "Local_Pct_G", "Still_Enroll","Still_Enroll_Pct", "DropOut", "DropOut_Pct")
+
+NYED_GRAD_Reduced_columns <- select(NYED_GRAD, DBN, School, CohortYear, Category, Total, Total_Grad, All_Regents, Adv_Regents, Local, Still_Enroll, DropOut)
+```
+
+####3. Delete August Graduation Rows
+```{r}
+#We will delete "August" graduation rows and keep the ones for "June"
+table(NYED_GRAD$Category)
+NYED_GRAD_Reduced <- filter(NYED_GRAD_Reduced_columns, !(Category=='"4 Year August"'| Category=='"5 Year August"'))
+table(NYED_GRAD_Reduced$Category)
+```
+
+####4.0. Keep 4 and 6 Year Graduation
+We are going to keep only 4 and 6 year graduation results. To do this, we create a simplified column with 4, 5, 6 and filter 4 and 6. 
+```{r}
+NYED_GRAD_Reduced$Category <- substr(NYED_GRAD_Reduced$Category, 2, 2) #The second letter of '"4 year ~"'
+#filter
+NYED_GRAD_46 <- filter(NYED_GRAD_Reduced, Category=="4"|Category=="6")
+```
+
+####4.1. Keep 4 and 6 Year Graduation
+Create a graduation year column
+```{r}
+NYED_GRAD_46$Grad_Year <- as.numeric(as.character(NYED_GRAD_46$CohortYear))+as.numeric(as.character(NYED_GRAD_46$Category))
+#Remove double quotations from "DBN" and "School" columns.
+substr_middle <- function(x){
+  substr(x, 2, nchar(x)-1)
+}
+NYED_GRAD_46$DBN <- substr_middle(as.character(NYED_GRAD_46$DBN))
+NYED_GRAD_46$School <- substr_middle(as.character(NYED_GRAD_46$School))
+```
+
+####5. Filter by Year
+Now we separate the dataset by each graduation year form 2006 to 2015.
+```{r}
+#2006
+NYED_GRAD_06 <- filter(NYED_GRAD_46, Grad_Year=="2006")
+#2006 only has 4 year graduation. 
+#Rename and reorder the columns
+names(NYED_GRAD_06)
+names(NYED_GRAD_06) <- c("DBN","School","CohortYear","Category","Total4", "TotalGrad4","AllRegents4","AdvRegents4","Local4", "StillEnroll4","DropOut4","Year")
+NYED_GRAD_06_Selected <- select(NYED_GRAD_06, DBN, School, Year, Total4, TotalGrad4, AllRegents4, AdvRegents4, Local4, StillEnroll4, DropOut4)
+```
+
+####6. Check the Class of Variables
+Check if we need to change the class of the columns. In this case, they are all numeric. 
+```{r}
+list_of_columns <- list(NYED_GRAD_06_Selected$DBN, NYED_GRAD_06_Selected$School, NYED_GRAD_06_Selected$Year, NYED_GRAD_06_Selected$Total4, NYED_GRAD_06_Selected$TotalGrad4, NYED_GRAD_06_Selected$AllRegents4, NYED_GRAD_06_Selected$AdvRegents4, NYED_GRAD_06_Selected$Local4, NYED_GRAD_06_Selected$StillEnroll4, NYED_GRAD_06_Selected$DropOut4)
+sapply(list_of_columns, class)
+```
+
+####7. Save the Data Frame
+```{r}
+write.csv(NYED_GRAD_06_Selected, "NYED_Graduation_Rate_2006_Cleaned.csv")
+```
+
+####8. Repeat the Process
+From 2005 (Graduation year of 2010), there are June and August. We will only use the one for June. 
+```{r}
+#2015
+NYED_GRAD_15 <- filter(NYED_GRAD_46, Grad_Year=="2015")
+#From 2007 there are 4 and 6 year graduations. 
+NYED_GRAD_15_4 <- filter(NYED_GRAD_15, Category=="4")
+NYED_GRAD_15_6 <- filter(NYED_GRAD_15, Category=="6")
+#Rename and reorder the columns of the two dataframes.
+names(NYED_GRAD_15)
+names(NYED_GRAD_15_4) <- c("DBN","School","CohortYear","Category","Total4","TotalGrad4","AllRegents4","AdvRegents4","Local4","StillEnroll4","DropOut4","Year")
+names(NYED_GRAD_15_6) <- c("DBN","School","CohortYear","Category","Total6","TotalGrad6","AllRegents6","AdvRegents6","Local6","StillEnroll6","DropOut6","Year")
+
+NYED_GRAD_15_4_Selected <- select(NYED_GRAD_15_4, DBN, School, Year, Total4, TotalGrad4,AllRegents4, AdvRegents4, Local4, StillEnroll4, DropOut4)
+NYED_GRAD_15_6_Selected <- select(NYED_GRAD_15_6, DBN, Total6, TotalGrad6,AllRegents6, AdvRegents6, Local6, StillEnroll6, DropOut6)
+NYED_GRAD_15_Joined <- full_join(NYED_GRAD_15_4_Selected, NYED_GRAD_15_6_Selected, by="DBN")
+```
+Check if we need to change the class of the columns. 
+```{r}
+list_of_columns <- list(NYED_GRAD_15_Joined$DBN, NYED_GRAD_15_Joined$School, NYED_GRAD_15_Joined$Year, NYED_GRAD_15_Joined$Total4, NYED_GRAD_15_Joined$TotalGrad4, NYED_GRAD_15_Joined$AllRegents4, NYED_GRAD_15_Joined$AdvRegents4, NYED_GRAD_15_Joined$Local4, NYED_GRAD_15_Joined$StillEnroll4, NYED_GRAD_15_Joined$DropOut4)
+sapply(list_of_columns, class)
+```
+Finish
+```{r}
+write.csv(NYED_GRAD_15_Joined, "NYED_Graduation_Rate_2015_Cleaned.csv")
+```
+
+#### Footnote:
+
+The original dataset is downloaded from the website:  
+http://schools.nyc.gov/Accountability/data/GraduationDropoutReports/default.htm
+
+The dataset has information about the Mathematics test results of all the public schools in New York City from 3rd to 8th grade.  
+The excel file has several sheets and we will only use "All Student" spread sheet.  
+Initial clean: Deleting commas in all "_Num" columns in R with the following code.
+```{r eval=FALSE}
+NYC_Grad <- read.csv("~/Desktop/NYC_Graducation_Resuts.csv")
+
+#Total Cohort
+total <- NYC_Grad$Total_Cohort_Num
+total.num <- as.numeric(gsub(",", "", as.character(total)))
+NYC_Grad$Total_Cohort_Num <- total.num
+
+#Total Graduation
+grad <- NYC_Grad$Total_Grads_Num
+grad.num <- as.numeric(gsub(",", "", as.character(grad)))
+NYC_Grad$Total_Grads_Num <- grad.num
+
+#Total Regents
+regents <- NYC_Grad$Total_Regents_Num
+regents.num <- as.numeric(gsub(",", "", as.character(regents)))
+NYC_Grad$Total_Regents_Num <- regents.num
+
+#Advanced Regents
+adregents <- NYC_Grad$Advanced_Regents_Num
+adregents.num <- as.numeric(gsub(",", "", as.character(adregents)))
+NYC_Grad$Advanced_Regents_Num <- adregents.num
+
+#Regents without Advanced
+nadregents <- NYC_Grad$Regents_wo_Advanced_Num
+nadregents.num <- as.numeric(gsub(",", "", as.character(nadregents)))
+NYC_Grad$Regents_wo_Advanced_Num <- nadregents.num
+
+#Local
+local <- NYC_Grad$Local_Num
+local.num <- as.numeric(gsub(",", "", as.character(local)))
+NYC_Grad$Local_Num <- local.num
+
+#Still Enrolled
+enroll <- NYC_Grad$Still_Enrolled_Num
+enroll.num <- as.numeric(gsub(",", "", as.character(enroll)))
+NYC_Grad$Still_Enrolled_Num <- enroll.num
+
+#Dropped Out
+drop <- NYC_Grad$Dropped_Out_Num
+drop.num <- as.numeric(gsub(",", "", as.character(drop)))
+NYC_Grad$Dropped_Out_Num <- drop.num
+
+
+write.csv(NYC_Grad, "NYED_Grad_Results.csv")
+```

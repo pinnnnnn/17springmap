@@ -1,0 +1,159 @@
+---
+title: "2010 NYC Household Attributes Data Cleaning"
+author: "Peiyun Zhang"
+date: "March 5, 2016"
+output: html_document
+---
+
+####0. Install Required Packages.
+```{r,message=FALSE}
+#"dplyr" package is used to do data cleaning and scraping  
+if(!require(dplyr)) 
+    install.packages("dplyr")
+    require("dplyr")
+#"RCurl" package is used to read raw data from github
+if(!require(RCurl)) 
+    install.packages("RCurl")
+    require("RCurl")
+```
+
+####1. Reading Datasets.
+First, I read all three datasets that we will use in the cleaning process, they are: (1) gender data, (2) employment data and (3) income data. These three datasets, regarding to several census attributes for New York City, are collected from 2010 census data from American Census Bureau.
+```{r}
+#Reading gender data
+genderdataURL <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/2010_NYC_Age_and_Sex.csv")
+genderdata <- read.csv(text = genderdataURL, quote = "")
+#Reading employment data
+employmentdataURL <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/2010_NYC_Employment_Data.csv")
+employmentdata <- read.csv(text = employmentdataURL, quote = "")
+#Reading income data
+incomedataURL <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/2010_NYC_Individual_Income.csv")
+incomedata <- read.csv(text = incomedataURL, quote = "")
+#Reading population data
+populationURL <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/2010_NYC_Population.csv")
+populationdata <- read.csv(text = populationURL, quote = "")
+```
+
+####2. Process Gender Dataset
+* I used 15 out of 871 variables used from the raw datasets:
+    + 1. __GEO.id2__:        2010 census data geoid10 code by census tract  
+    + 2. __SUBHD0101_S01__:  Total population  
+    + 3. __SUBHD0102_S01__:  Total male population  
+    + 4. __SUBHD0103_S01__:  Total femal population  
+    + 5. __SUBHD0102_S20__:  Total male population 15 - 19 years  
+    + 6. __SUBHD0102_S26__:  Total mael population 20 - 24 years  
+    + 7. __SUBHD0102_S80__:  Total mael population 65 - 69 years  
+    + 8. __SUBHD0102_S86__:  Total male population 70 - 74 years  
+    + 9. __SUBHD0102_S92__:  Total male population 75 - 79 years  
+    + 10. __SUBHD0102_S98__:  Total male population 80 - 84 years  
+    + 11. __SUBHD0102_S104__:  Total male population 85 - 89 years  
+    + 12. __SUBHD0102_S110__:  Total male population 90 - 94 years  
+    + 13. __SUBHD0102_S116__:  Total male population 95 - 100 years  
+    + 14. __SUBHD0102_S123__:  Total male population 105 - 109 years  
+    + 15. __SUBHD0102_S124__:  Total male population 110 and above
+
+```{r}
+#Change the used columns into corresponding names
+genderdata <- rename(genderdata, Geoid10 = GEO.id2, Totalpop = SUBHD0101_S01, Malepop = SUBHD0102_S01, Femalepop = SUBHD0103_S01)
+#Sum up total male population from age 15 - 24
+genderdata$Male1524 <- genderdata$SUBHD0102_S20 + genderdata$SUBHD0102_S26
+#Sum up total male population above age 65
+genderdata$Male65Plus <- genderdata$SUBHD0102_S80 + genderdata$SUBHD0102_S86 + genderdata$SUBHD0102_S92 + genderdata$SUBHD0102_S98 + genderdata$SUBHD0102_S104 + genderdata$SUBHD0102_S110 + genderdata$SUBHD0102_S116 + genderdata$SUBHD0102_S123 + genderdata$SUBHD0102_S124
+#Only keep the columns needed
+genderdata <- genderdata[c(2,4:6,872:873)]
+```
+
+
+
+
+####3. Process Population Dataset
+* I used 8 out of 74 variables from the raw dataset:
+    + 1. __GEO.id2__:        2010 census data geoid10 code by census tract  
+    + 2. __D003__:           Population of one race: - White alone  
+    + 3. __D004__:           Population of one race: - Black or African American alone  
+    + 4. __D005__:           Population of one race: - American Indian and Alaska Native alone  
+    + 5. __D006__:           Population of one race: - Asian alone  
+    + 6. __D007__:           Population of one race: - Native Hawaiian and Other Pacific Islander alone  
+    + 7 .__D008__:           Population of one race: - Some Other Race alone  
+    + 8 .__D009__:           Two or More Races: - Population of two races  
+```{r}
+populationdata <- rename(populationdata, Geoid10 = GEO.id2, Whitepop = D003, Blackpop = D004, Nativepop = D005, Asianpop = D006, Nativepacpop = D007, Otherpop = D008, Mixedpop = D009)
+populationdata <- populationdata[c(2,5:11)]
+```
+
+
+
+####4. Process Employment Dataset
+* I used 11 out of 243 variables from the raw dataset:  
+    + 1. __GEO.id2__:        2010 census data geoid10 code by census tract  
+    + 2. __HC02_EST_VC01__:  Percentage of the population in labour force  
+    + 3. __HC04_EST_VC01__:  Percentage of the unemployed labour force  
+    + 4. __HC04_EST_VC21__:  Percentage of the unemployed labour force for Hispanic origin  
+    + 5. __HC04_EST_VC22__:  Percentage of the unemployed labour force for White alone  
+    + 6. __HC04_EST_VC13__:  Percentage of the unemployed labour force for White Hispanic  
+    + 7. __HC04_EST_VC14__:  Percentage of the unemployed labour force for Black Hispanic  
+    + 8. __HC04_EST_VC16__： Percentage of the unemployed labour force for Asian Hispanic  
+    + 9. __HC04_EST_VC38__:  Percentage of the unemployed labour force for age between 24-65 with a degree less than High School  
+    + 10. __HC04_EST_VC41__:  Percentage of the unemployed labour force for age between 24-65 with a Bacholar's degree or higher  
+    + 11. __HC04_EST_VC31__:  Percentage of the unemployed labour force for people who is below poverty level for the past 12 months (according to the federal poverty guidline issued by census bureau)  
+
+* Explaination of terms used in this datasets:  
+    + __Labour Force__: The subset of Americans who have jobs or are seeking a job, are at least 16 years old, are not serving in the military and are not institutionalized.In other words, all Americans who are eligible to work in the everyday U.S. economy.(by the U.S. Bureau of Labor Statistics)
+    + __Unemployment Rate__: The percentage of the total labor force that is unemployed but actively seeking employment and willing to work (by International Labour Organization)
+    + __poverty level__: A standard to determine the status of a household according to annual Federal Poverty Guideline (by Office of the Assistant Scretary for Planning and Evaluation)  
+```{r}
+#Only keep the columns needed
+employmentdata <- rename(employmentdata, Geoid10 = GEO.id2, Laborforce = HC02_EST_VC01, Unemploymentrate = HC04_EST_VC01)
+#Assign unemployment rate within races, age, and poverty groups to new columns with corresponding names
+employmentdata$HispanicUnemployed <- employmentdata$HC04_EST_VC21
+employmentdata$WhiteUnemployed <- employmentdata$HC04_EST_VC22
+employmentdata$HisWhiteUnemployed <- employmentdata$HC04_EST_VC13
+employmentdata$HisBlackUnemployed <- employmentdata$HC04_EST_VC14
+employmentdata$HisAsianUnemployed <- employmentdata$HC04_EST_VC16
+employmentdata$BelowHighSchoolUnemployed <- employmentdata$HC04_EST_VC38
+employmentdata$AboveBacholarUnemployed <- employmentdata$HC04_EST_VC41
+employmentdata$PovertyUnemployed <- employmentdata$HC04_EST_VC31
+#Only keep the columns needed
+employmentdata <- employmentdata[c(2,6,10,244:251)]
+```
+
+####4. Process Income Dataset
+* I used 2 out of 3 variables from the raw datasets:  
+    + 1. __GEO.id2__:    2010 census data geoid10 code by census tract  
+    + 2. __HD01_VD01__:  Average income  
+```{r}
+#Change the used columns into corresponding names
+incomedata <- rename(incomedata, Geoid10 = GEO.id2)
+incomedata <- rename(incomedata, Income = HD01_VD01)
+#Only keep the columns needed
+incomedata <- incomedata[c(2,4)]
+```
+
+####5. Combine All Three Datasets Processed
+```{r}
+#Join three datasets together;
+censusdata <- full_join(populationdata, genderdata, by = "Geoid10")
+censusdata <- full_join(censusdata, employmentdata, by = "Geoid10")
+censusdata <- full_join(censusdata, incomedata, by = "Geoid10")
+#Remove unprocessed datasets to free up memory
+rm(genderdata, employmentdata, incomedata, genderdataURL, employmentdataURL, incomedataURL)
+setwd("/Users/Pinnzhang/Desktop")
+write.csv(censusdata, file = "NYC_2010_Census_Data_Other_Attributes.csv")
+```
+
+##### Footnote:
+These three raw datasets were all downloaded from 2010 census dataset downloaded from American Factfinder, a website supported by American Census Bureau. 
+URL:http://factfinder.census.gov/faces/nav/jsf/pages/index.xhtml  
+
+* In order to make this RMD file reproducable, I downloaded the file and pushed it onto my github with an open access.   
+    + a. __Gender Data__  
+        URL: https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/2010_NYC_Age_and_Sex.csv  
+    + b. __Employment Data__  
+        URL: https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/2010_NYC_Employment_Data.csv  
+    + c. __Income Data__  
+        URL: https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/2010_NYC_Individual_Income.csv  
+        
+I replaced all of the "," in the raw datasets in Excel before I uploaded them to github. Otherwise, R regards "," as a seperator for columns when it reads the datasets.
+    
+
+

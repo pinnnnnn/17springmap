@@ -1,0 +1,78 @@
+---
+title: "Clean New York City Public Schools Demographics"
+author: "Ibuki Ogasawara"
+date: "March 16, 2016"
+output: html_document
+---
+This R markdown file cleans the datasets of demographics of New York City public schools from 2011 to 2015. Before running the code, some initial steps are required. (See footnotes.) 
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(RCurl))install.packages("RCurl")
+library(RCurl) #getURL(download datasets from a website)
+if(!require(dplyr))install.packages("dplyr")
+library(dplyr) #summarize, arrange, select, filter
+```
+
+####1. Download and Read Datasets from GitHub
+```{r message=FALSE}
+mydata <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/NYED%20Demographics/NYED_Demographics.csv")
+NYED_DEMO <- read.csv(text = mydata, quote = "")
+dim(NYED_DEMO)
+```
+
+####2. Reduce Columns
+First, we will delete columns that we are not interested in. 
+```{r message=FALSE}
+names(NYED_DEMO)
+NYED_DEMO_Reduced <- select(NYED_DEMO, DBN, School.Name, Year,
+                            Total.Enrollment, X..Female, X..Male,
+                            X..Asian, X..Black, X..Hispanic, X..White, 
+                            X..Other, X..Students.with.Disabilities, 
+                            X..English.Language.Learners, X..Poverty)
+#rename columns
+names(NYED_DEMO_Reduced) <- c("DBN", "School", "Year", 
+                              "Total", "Female", "Male", 
+                              "Asian", "Black", "Hispanic", "White", 
+                              "Other", "SWD", "ELL", "Poverty")
+```
+
+####3. Clean "Year" Column
+Now, clean the "Year" column so that it has the form 20XX instead of 20XX-XX. 
+```{r}
+table(NYED_DEMO_Reduced$Year)
+NYED_DEMO_Reduced$Year <- substr(NYED_DEMO_Reduced$Year, 1, 4)
+```
+
+####4. Check the Class of Variables
+Check if we need to change the class of the columns. In this case, all the columns that we want them to be numeric are "integer".
+```{r}
+list_of_names <- list(NYED_DEMO_Reduced$DBN, NYED_DEMO_Reduced$School, NYED_DEMO_Reduced$Year, NYED_DEMO_Reduced$Total, NYED_DEMO_Reduced$Female, NYED_DEMO_Reduced$Male, NYED_DEMO_Reduced$Asian, NYED_DEMO_Reduced$Black, NYED_DEMO_Reduced$Hispanic, NYED_DEMO_Reduced$White, NYED_DEMO_Reduced$Other, NYED_DEMO_Reduced$SWD, NYED_DEMO_Reduced$ELL, NYED_DEMO_Reduced$Poverty)
+sapply(list_of_names, class)
+```
+
+####5. Subset by Year
+Lastly, we will subset them by "Year"
+```{r}
+NYED_DEMO_11 <- filter(NYED_DEMO_Reduced, Year=="2011")
+NYED_DEMO_12 <- filter(NYED_DEMO_Reduced, Year=="2012")
+NYED_DEMO_13 <- filter(NYED_DEMO_Reduced, Year=="2013")
+NYED_DEMO_14 <- filter(NYED_DEMO_Reduced, Year=="2014")
+NYED_DEMO_15 <- filter(NYED_DEMO_Reduced, Year=="2015")
+```
+
+####6. Save the Data Frames
+```{r}
+write.csv(NYED_DEMO_15, "NYED_Demographics_2015_Cleaned.csv")
+```
+
+#### Footnote:
+
+Data Source:NYC Department of Education  
+http://schools.nyc.gov/AboutUs/schools/data/default.htm  
+
+Under "Population and Demographics", click "Demographic Snapshot"  
+
+Initial cleaning process:  
+1. Choose the spread sheet for "school" and export it as a csv file.  
+2. Deleted commas in one the school names in csv file. 

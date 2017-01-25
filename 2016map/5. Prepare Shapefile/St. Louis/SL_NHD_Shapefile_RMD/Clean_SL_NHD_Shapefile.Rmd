@@ -1,0 +1,59 @@
+---
+title: "Clean St. Louis Neighborhood Shapefile"
+author: "Ibuki"
+date: "March 31, 2016"
+output: html_document
+---
+This R markdown file cleans and add attributes to the polygon shapefile of neighborhoods in St. Louis. Before running the code, some initial steps are required. 
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(maptools))install.packages("maptools")
+library(maptools) #readShapeSpatial
+if(!require(rgdal))install.packages("rgdal")
+library(rgdal) #spTransform (transform the coordinate system of the shapefile)
+```
+
+
+####1. Download the Shapefile
+The shapefile of the neighborhoods of the city of St. Louis can be downloaded from   
+http://data.stlouis-mo.gov/downloads.cfm  
+
+For some reason, the function that downloads the zipped shapefile does not work for this shapefile. So we downloaded the zipped file from the website and read the shapefile with the following code. 
+
+```{r eval=FALSE}
+SL_NHD <- readShapeSpatial("/data/home/graphics/MAP_16_Spring/Final/5. Prepare Shapefile/St. Louis/SL_NHD_Shapefile_RMD/nbrhds_wards/BND_Nhd88_cw")
+```
+
+####2. Check the Properties of the Shapefile
+Check some the properties and attributes of the polygon shapefile of St. Louis Neighborhood.  
+```{r message=FALSE}
+length(SL_NHD)
+class(SL_NHD)
+proj4string(SL_NHD)
+dim(SL_NHD@data)
+names(SL_NHD@data)
+head(SL_NHD@data)
+#check the class of the key field (NHD_NUM)
+class(SL_NHD@data$NHD_NUM)
+```
+
+####3. Reduce Attributes
+Now, remove columns that we do not need and keep only "NHD_NUM" and "NHD_NAME"
+```{r}
+SL_NHD_Reduced <- SL_NHD[, -c(3:6)]
+#check the result
+names(SL_NHD_Reduced@data)
+```
+
+####4. Reproject and Transform the Shapefile
+```{r}
+#Open the projection folder in the shapefile (.prj) and find the projection code in the following website:
+# http://downloads.esri.com/support/documentation/ims_/Support_files/elements/pcs.htm
+#In this case, it is 102696 (UTM)
+proj4string(SL_NHD_Reduced) <- CRS("+init=esri:102696")
+#epsg:4326 is for latitude and longitude coordinate system. 
+SL_NHD_Reduced_LatLong <- spTransform(SL_NHD_Reduced, CRS("+init=epsg:4326"))
+
+writeSpatialShape(SL_NHD_Reduced_LatLong, "SL_NHD_Shapefile_Cleaned")
+```

@@ -1,0 +1,90 @@
+---
+title: "Clean St. Louis Public Schools Demographics"
+author: "Ibuki Ogasawara"
+date: "February 17, 2016"
+output: html_document
+---
+This R markdown file cleans the datasets of demographics in St. Louis public school from 2008 to 2015. Before running the code, some initial steps are required. (See footnotes.)  
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(RCurl))install.packages("RCurl")
+library(RCurl) #getURL(download datasets from a website)
+if(!require(dplyr))install.packages("dplyr")
+library(dplyr) #mutate, arrange, select
+```
+
+####1. Download and Read Datasets from GitHub
+```{r}
+mydata <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/SLED_Demographics/SLED_Demographic_Data.csv")
+SLED_DEMO <- read.csv(text = mydata, quote = "")
+```
+
+####2. Compute Populations by Race
+First, we will add the columns of counts of students in each ethnic groups by multiplying "total" and each percentage. 
+```{r}
+SLED_DEMO_Counts <- mutate(SLED_DEMO, 
+                    Asian = round(SLED_DEMO$TOTAL*SLED_DEMO$Asian_Per/100, digits=0), 
+                    Black = round(SLED_DEMO$TOTAL*SLED_DEMO$Black_Per/100, digits=0),
+                    Hispanic = round(SLED_DEMO$TOTAL*SLED_DEMO$Hispanic_Per/100, digits=0),
+                    Indian = round(SLED_DEMO$TOTAL*SLED_DEMO$Indian_Per/100, digits=0),
+                    White = round(SLED_DEMO$TOTAL*SLED_DEMO$White_Per/100, digits=0))
+```
+
+####2.1 Compute the Number of Free Reduced Lunch
+Get rid of "*" from the "FreeReducedLunch_FTE_Per" column. And compute the total counts.
+```{r}
+SLED_DEMO_Counts$FreeReducedLunch_FTE_Per[SLED_DEMO_Counts$FreeReducedLunch_FTE_Per=="*"] <- NA
+FTE_per_cha <- as.character(SLED_DEMO_Counts$FreeReducedLunch_FTE_Per)
+FTE_per_num <- as.numeric(FTE_per_cha)
+SLED_DEMO_Counts2 <- mutate(SLED_DEMO_Counts,
+                            FTE = round(SLED_DEMO_Counts$TOTAL*FTE_per_num/100,
+                                        digits=0))
+```
+
+####3. Assign School Number
+We will assign school number to each school by extracting the nubmers in the parentheses in the SCHOOL_NAME column. 
+```{r}
+#Function that extracts the 5th last character through 2rd last character of characters. 
+substrRight_1 <- function(x){
+  substr(x, nchar(x)-4, nchar(x)-1)
+}
+#Apply the function and convert the output into numeric
+SLED_DEMO_Counts2$SchNum <- as.numeric(substrRight_1(as.character(SLED_DEMO_Counts2$SCHOOL_NAME)))
+```
+
+####4. Select Columns
+Lastly, we will only select the columns that we created and arrange by year and school number. 
+```{r}
+SLED_DEMO_Selected <- dplyr::select(SLED_DEMO_Counts2,SCHOOL_NAME:TOTAL, Asian:SchNum)
+#Move two of the columns "SchNum" and "TOTAL" so that the table makes more sense. 
+SLED_DEMO_Reordered <- SLED_DEMO_Selected[, c("SCHOOL_NAME","YEAR","SchNum","Asian","Black","Hispanic","Indian","White","FTE","TOTAL")] 
+#Finally, we will arrange the rows and rename columns. 
+SLED_DEMO_Arranged <- arrange(SLED_DEMO_Reordered, YEAR, SchNum)
+names(SLED_DEMO_Arranged) <- c("School","Year","SchNum","Asian","Black","Hispanic","Indian","White","FTE","Total")
+```
+
+####9. Save the data frame
+```{r}
+write.csv(SLED_DEMO_Arranged, "SLED_Demographic_Cleaned.csv")
+```
+
+#### Footnote: 
+
+The original data source: Missouri Department of Elementary & Secondary Education  
+http://mcds.dese.mo.gov/quickfacts/SitePages/DistrictInfo.aspx?ID=__bk8100130013005300130013005300  
+
+Under "ST. LOUIS CITY -- Resources and Process", "Student Demographics" - "Building"  
+
+Initial cleaning process:  
+1. In Excel, deleted commas in one the school names (EARL NANCE, SR. ELEM. (5610))  
+2. In Excel, deleted two columns in which all the entries were 0s.  
+3. Import the dataset into Rstudio and deleted commas in the column "TOTAL" by
+```{r, eval=FALSE}
+total <- SLED.Demographic.Data$TOTAL
+total.cha <- as.character(total)
+total.num <- as.numeric(gsub(",", "", total.cha))
+SLED.Demographic.Data$TOTAL <- total.num
+write.csv(SLED.Demographic.Data, "SLED_Demographic_Data.csv")
+```
+

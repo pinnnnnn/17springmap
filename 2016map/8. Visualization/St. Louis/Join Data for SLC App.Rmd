@@ -1,0 +1,160 @@
+---
+title: "SLC_App1"
+author: "Ibuki Ogasawara"
+date: "May 3, 2016"
+output: html_document
+---
+
+This R markdown file will introduce the initial steps to create an interactive app and some heat maps color by attributes.
+
+First, we will merge the dataset into the shapefile
+####1A. Read the Neighborhood Polygon Shapefile
+```{r}
+if(!require(raster))install.packages("raster")
+library("raster") #merge (join shapefile and csv files)
+if(!require(maptools)) install.packages("maptools")
+library(maptools) #readShapeSpatial
+if(!require(spdep))install.packages("spdep")
+library(spdep) #order (order spatial information by attributes)
+
+SL_NHD <- readShapeSpatial("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/St. Louis/SL_NHD_Shapefile/SL_NHD_Shapefile")
+#Check the properties of the shapefile
+length(SL_NHD)
+class(SL_NHD)
+proj4string(SL_NHD)
+names(SL_NHD@data)
+#check the class of the key field (NHD_NUM)
+class(SL_NHD@data$NHD_NUM)
+```
+
+####2A. Reduce Attributes
+Now, remove columns that we do not need and keep only "NHD_NUM" and "NHD_NAME"
+```{r}
+SL_NHD_Reduced <- SL_NHD[, -c(3:6)]
+#check the result
+names(SL_NHD_Reduced@data)
+```
+
+####3A. Read and Join the Attribute Dataset
+Read the dataframe that we are going to merge into the shapefile
+```{r}
+Census_Data <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/St. Louis/SL_NHD_Census_Data_2010.csv")
+
+names(Census_Data)
+#We do not need "NHD_NAM" column
+Census_Data_Reduced <- Census_Data[,-1]
+names(Census_Data_Reduced)
+
+Crime_Data <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/St. Louis/SL_NHD_Crime_Data_2015.csv")
+names(Crime_Data)
+#We do not need "X.1", "X", and "Year" columns
+Crime_Data_Reduced <- Crime_Data[,-c(1:3)]
+names(Crime_Data_Reduced)
+
+Census_Crime_Data <- full_join(Census_Data_Reduced, Crime_Data_Reduced, by="NHD_NUM")
+```
+
+####4A. Choose Variables of Our Interests
+```{r}
+#In our example, we will choose "Popultn", "White", "Black", "IncPrCp", and "EnmplRt" from Census_Data_Reduced.
+#From Crime_Data_Reduced, we will choose "Homicid", "Assault", and "Ttl_Crm". 
+column0 <- Census_Crime_Data$NHD_NUM
+
+column1 <- Census_Crime_Data$Popultn
+column2 <- Census_Crime_Data$White
+column3 <- Census_Crime_Data$Black
+column4 <- Census_Crime_Data$IncPrCp
+column5 <- Census_Crime_Data$EnmplRt
+
+column6 <- Census_Crime_Data$Homicid
+column7 <- Census_Crime_Data$Assault
+column8 <- Census_Crime_Data$Ttl_Crm
+
+Census_Crime_Selected <- cbind.data.frame(column0, column1, column2, column3, column4, column5, column6, column7, column8)
+
+names(Census_Crime_Selected) <- c("NHD_NUM","Popultn","White","Black","IncPrCp","EnmplRt","Homicid","Assault","Ttl_Crm")
+```
+
+####5A. Merge and Write a New Shapefile
+```{r}
+SL_NHD_Shape_Attribute <- merge(SL_NHD_Reduced, Census_Crime_Selected, by='NHD_NUM')
+#Check the result
+View(SL_NHD_Shape_Attribute@data)
+
+SL_NHD_Ordered <- SL_NHD_Shape_Attribute[order(SL_NHD_Shape_Attribute$NHD_NUM),]
+
+View(SL_NHD_Ordered)
+
+proj4string(SL_NHD_Ordered) <- CRS("+init=epsg:4326")
+
+writeSpatialShape(SL_NHD_Ordered, "SL_NHD_Shapefile_Selected")
+```
+
+####1B. Read the School Point Shapefile
+```{r}
+SL_SCH <- readShapeSpatial("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/St. Louis/SL_SCH_Shapefile/SL_SCH_Shapefile")
+#Check the properties of the shapefile
+length(SL_SCH)
+class(SL_SCH)
+proj4string(SL_SCH)
+names(SL_SCH@data)
+#check the class of the key field (SchNum)
+class(SL_SCH@data$SchNum)
+```
+
+####2B. Read the Attribute Dataset
+Read the dataframe that we are going to merge into the shapefile
+```{r}
+School_Data <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/St. Louis/SL_School_Data_2015.csv")
+
+names(School_Data)
+#We do not need "X"column
+School_Data_Reduced <- School_Data[,-1]
+names(School_Data_Reduced)
+class(School_Data_Reduced$SchNum)
+School_Data_Reduced$SchNum
+#Store the variable as a factor
+School_Data_Reduced$SchNum <- as.factor(School_Data_Reduced$SchNum)
+
+#Rename the columns so that they don't overlap with census data
+names(School_Data_Reduced) <- c("SchNum","AsianStu","BlackStu","HispcStu","IndiStu","WhiteStu","FTE","TotalStu","TtlIncd","DrugNum","SspnsnN","EngAc","EngRe","EngBB","EngBa","EngPr","EngAd","EngMS","MatAc","MatRe","MatBB","MatBa","MatPr","MatAd","MatMS","SciAc","SciRe","SciBB","SciBa","SciPr","SciAd","SciMS","GradNum","GrdAbNA","PrcntTs","ACTScor")
+```
+
+####3A. Choose Variables of Our Interests
+```{r}
+#In our example, we will choose "BlackStu", "WhiteStu", "FTE", "TotalStu", "TtlIncd", "EngMS", "MatMS", "GradNum", and "ACTScor" from School_Data_Reduced.
+ 
+column0 <- School_Data_Reduced$SchNum
+
+column1 <- School_Data_Reduced$BlackStu
+column2 <- School_Data_Reduced$WhiteStu
+column3 <- School_Data_Reduced$FTE #It is actually missing for 2015
+column4 <- School_Data_Reduced$TotalStu
+column5 <- School_Data_Reduced$TtlIncd
+column6 <- School_Data_Reduced$EngMS
+column7 <- School_Data_Reduced$MatMS
+column8 <- School_Data_Reduced$GradNum
+column9 <- School_Data_Reduced$ACTScor
+
+School_Selected <- cbind.data.frame(column0, column1, column2, column3, column4, column5, column6, column7, column8, column9)
+
+names(School_Selected) <- c("SchNum","BlackStu","WhiteStu","FTE","TotalStu","TtlIncd","EngMS","MatMS","GradNum","ACTScor")
+```
+
+####3B. Merge and Write a New Shapefile
+```{r}
+SL_SCH_Shape_Attribute <- merge(SL_SCH, School_Selected, by='SchNum')
+#Check the result
+View(SL_SCH_Shape_Attribute@data)
+
+SL_SCH_Ordered <- SL_SCH_Shape_Attribute[order(SL_SCH_Shape_Attribute$SchNum),]
+
+View(SL_SCH_Ordered)
+proj4string(SL_SCH_Ordered) <- CRS("+init=epsg:4326")
+
+writeSpatialShape(SL_SCH_Ordered, "SL_SCH_Shapefile_Selected")
+```
+
+
+
+

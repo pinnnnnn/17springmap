@@ -1,0 +1,151 @@
+---
+title: "NYC_Census_Tract_Precinct_Transfer"
+author: "Peiyun Zhang"
+date: "May 6, 2016"
+output: html_document
+---
+
+####Install Packages
+```{r}
+if(!require(dplyr))install.packages("dplyr")
+  library("dplyr")
+```
+
+####Read Raw Datasets
+```{r}
+census <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/New York/NYC_2010_Census_Data_Other_Attributes.csv")
+key <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/6. Initial Join/NYC Census Data/precinct_blocks_key.csv")
+nycpop <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/New York/NYC_2010_Census_Data_Cleaned.csv", stringsAsFactors=FALSE)
+```
+
+####Join 
+```{r}
+#Disable scientific notation
+options(scipen=999) 
+key$Geoid10 <- floor(key$geoid10/10000)
+#Discard duplicate and NA values
+keyreduce <- key[-c(1)]
+keyreduce <- unique(keyreduce)
+keyreduce <- keyreduce[complete.cases(keyreduce),]
+#Combine datasets "keyreduce" and "census"
+censusdata <- full_join(census, keyreduce, by = "Geoid10")
+```
+
+#Create weight and do weighted average calculation
+```{r}
+#get the frequency of each Geoid10 and assign it into a temporary dataset
+freqtemp <- table(censusdata$Geoid10)
+freqtemp <- as.data.frame(freqtemp, stringsAsFactors = TRUE)
+freqtemp <- rename(freqtemp, Geoid10 = Var1)
+
+freqtemp$Geoid10 <- as.numeric(as.character(freqtemp$Geoid10))
+#Join the temporary dataset to censusdata
+censusdata <- left_join(censusdata, freqtemp, by = "Geoid10")
+
+#There are five levels in variable "Freq", which are: 1, 2, 3, 4, 5. This for loop decides the weight for each census tract.
+#Each census tract is divided equally into certain pieces according to the value of its corresponding frequency.
+for (i in 1:nrow(censusdata)){
+  if (censusdata$Freq[i] == 1){
+    censusdata$Weight[i] <- 1}
+  else if (censusdata$Freq[i] == 2){
+    censusdata$Weight[i] <- 1/2}
+  else if (censusdata$Freq[i] == 3){
+    censusdata$Weight[i] <- 1/3}
+  else if (censusdata$Freq[i] == 4){
+    censusdata$Weight[i] <- 1/4}
+  else {
+    censusdata$Weight[i] <- 1/5}
+}
+```
+
+```{r}
+#Multiply out all of the percentage variables
+variables1 <- c("Laborforce", "Unemploymentrate",	"HispanicUnemployed", "WhiteUnemployed", "HisWhiteUnemployed", "HisBlackUnemployed", "HisAsianUnemployed", "BelowHighSchoolUnemployed", "AboveBacholarUnemployed", "PovertyUnemployed")
+for (var in variables1){
+  for (i in 1:nrow(censusdata)){
+  censusdata[i,var] <- censusdata[i,var]*censusdata$Totalpop[i]/100    
+  }
+}
+
+#Multiply all of the variables with weight
+variables2 <- c("Whitepop", "Blackpop", "Nativepop", "Asianpop", "Nativepacpop", "Otherpop", "Mixedpop", "Totalpop", "Malepop", "Femalepop", "Male1524", "Male65Plus","Laborforce", "Unemploymentrate",  "HispanicUnemployed", "WhiteUnemployed", "HisWhiteUnemployed", "HisBlackUnemployed", "HisAsianUnemployed", "BelowHighSchoolUnemployed", "AboveBacholarUnemployed", "PovertyUnemployed","Income")
+for (var in variables2){
+  censusdata[[var]] <- round(censusdata[[var]] * censusdata$Weight)
+}
+```
+
+
+```{r}
+###########################Creat a new dataframe to store all the calculated values###########################
+#Track the existing precinct data in the raw data set
+existingprecinct <- distinct(select(censusdata,precinct))
+#Record the total number of precinct
+precinctNumber <- length(existingprecinct) 
+#Create a new data frame to store cleaned data
+censusstat <- data.frame("Precinct" = existingprecinct)
+#Arrange the censusstat in ascending order with column "Precinct"
+censusstat <- arrange(censusstat,precinct)
+
+###########################Summarise all of the variables by precinct###########################
+censusdata_df = tbl_df(censusdata)
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Whitepop = sum(Whitepop,na.rm = TRUE))
+censusstat$Whitepop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Blackpop = sum(Blackpop,na.rm = TRUE))
+censusstat$Blackpop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Nativepop = sum(Nativepop,na.rm = TRUE))
+censusstat$Nativepop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Asianpop = sum(Asianpop,na.rm = TRUE))
+censusstat$Asianpop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Nativepacpop = sum(Nativepacpop,na.rm = TRUE))
+censusstat$Nativepacpop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Otherpop = sum(Otherpop,na.rm = TRUE))
+censusstat$Otherpop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Mixedpop = sum(Mixedpop,na.rm = TRUE))
+censusstat$Mixedpop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Totalpop = sum(Totalpop,na.rm = TRUE))
+censusstat$Totalpop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Malepop = sum(Malepop,na.rm = TRUE))
+censusstat$Malepop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Femalepop = sum(Femalepop,na.rm = TRUE))
+censusstat$Femalepop <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Male1524 = sum(Male1524,na.rm = TRUE))
+censusstat$Male1524<- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Male65Plus = sum(Male65Plus,na.rm = TRUE))
+censusstat$Male65Plus <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(Unplyrate = sum(Unemploymentrate,na.rm = TRUE))
+censusstat$Unplyrate <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(HisUnplyrate = sum(HispanicUnemployed,na.rm = TRUE))
+censusstat$HisUnplyrate <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(WUnplyrate = sum(WhiteUnemployed,na.rm = TRUE))
+censusstat$WUnplyrate <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(HisWUnplyrate = sum(HisWhiteUnemployed,na.rm = TRUE))
+censusstat$HisWUnplyrate <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(HisBUnplyrate = sum(HisBlackUnemployed,na.rm = TRUE))
+censusstat$HisBUnplyrate <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(HisAUnplyrate = sum(HisAsianUnemployed,na.rm = TRUE))
+censusstat$HisAUnplyrate <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(BlwHSchlUnplyrate = sum(BelowHighSchoolUnemployed,na.rm = TRUE))
+censusstat$BlwHSchlUnplyrate <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(AbBchlrUnplyrate = sum(AboveBacholarUnemployed,na.rm = TRUE))
+censusstat$AbBchlrUnplyrate <- unlist(census_temp[2])
+census_temp <- censusdata_df %>% group_by(precinct) %>% summarise(PvtyUnplyrate = sum(PovertyUnemployed,na.rm = TRUE))
+censusstat$PvtyUnplyrate <- unlist(census_temp[2])
+censusstat <- censusstat[-77,]
+
+
+# setwd("/data/home/graphics/MAP_16_Spring/Pinn")
+# write.csv(censusstat, file = "NYC_2010_Census_Data_Other_Attributes_By_Precinct.csv")
+
+#cleandata <- read.csv("~/graphics/MAP_16_Spring/Pinn/NYC_2010_Census_Data_Cleaned.csv", stringsAsFactors=FALSE)
+censusstat <- rename(censusstat, Precinct = precinct)
+
+mergedata <- merge(censusstat, nycpop, by="Precinct")
+
+par(mfrow = c(1,1))
+plot(Whitepop~White,data=mergedata)
+plot(Blackpop~Black,data=mergedata)
+plot(Asianpop~Asian,data=mergedata)
+
+write.csv(mergedata, "NYC_Census_Data_by_Precinct_2010.csv")
+```
+

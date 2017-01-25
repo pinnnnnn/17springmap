@@ -1,0 +1,154 @@
+---
+title: "2010 Censusdata Cleaning"
+author: "Peiyun Zhang"
+date: "February 4, 2016"
+output: html_document
+---
+
+####0. Install required packages;
+```{r,message=FALSE}
+#"dplyr" package is used to do data cleaning and scraping
+if(!require(dplyr))
+    install.packages("dplyr")
+    require("dplyr")
+#"RCurl" package is used to read raw data from github
+if(!require(RCurl))
+    install.packages("RCurl")
+    require("RCurl")
+```
+
+####1.Reading Dataset
+First I read the raw data of New York City 2010 census data. This data is provided by John Keefe on his personal blog in form of Google Fusion Table.
+```{r}
+#Read rawdata from Github
+mydataURL <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/NYC_Blocks_2010CensusData_Plus_Precincts.csv")
+rawdata <- read.csv(text = mydataURL, quote = "")
+```
+####Cleaning Dataset and Renaming Variables
+* Variables that I took directly from this dataset:  
+    + 1. __precinc__:   NYPD police precinct number  
+    
+* Variables without Hispanic population as a seperate one  
+    + 2. __P0010003__: Population of Hispanic White  
+    + 3. __P0010004__: Population of Hispanic Black  
+    + 4. __P0010005__: Population of Hispanic American Indian and Alaska Native  
+    + 5. __P0010006__: Population of Hispanic Asian  
+    + 6. __P0010007__: Population of Native Hawaiian and Other Pacific Islander  
+    + 7. __P0010008__: Population of Other Hispanic Races  
+    + 8. __P0010009__: Population of Other Hispanic with Mixed Races  
+    
+* Variables with Hispanic population as a seperate one  
+    + 9. __P0020001__:  Whole population  
+    + 10. __P0020005__:  Population of White alone  
+    + 11. __P0020002__:  Population of Hispanic  
+    + 12. __P0020008__:  Population of Asian alone  
+    + 13. __P0020006__:  Population of Black alone  
+    + 14. __P0020007__:  Population of American Indian and Alaska Native   
+    + 15. __P0020009__:  Population of Native Hawaiian and Other Pacific Islander  
+    + 16. __P0020010__:  Population of Others alone  
+    + 17. __P0020011__： Population of Mixed  
+
+I took 17 out 135 variables from this raw dataset. First I deleted all of the columns that has no precinct information. In doing this, we are not losing informations because all of the columns without information have no census information either. I also sorted the whole dataset by precinct. Then I changed the original column names into their corresponding races.  
+* Explaination of terms used in this datasets:  
+    + __Precicnt_: Also known as police precinct; New York City is divided into 76 geographical areas called precincts.
+```{r}
+#Delete the row with "Princinct = NA"
+rawdata <- rawdata[complete.cases(rawdata$precinct),]
+#Arrange the rawdata in ascending order with column "Precinct"
+rawdata <- arrange(rawdata,precinct)
+#Change the column names into corresponding races
+censusdata <- rename(rawdata, Population = P0020001, HWhite = P0010003, HBlack = P0010004, HAsian = P0010006, HNative  = P0010005, HNativepac  = P0010007, HOthers = P0010008, HMixed = P0010009, White = P0020005, Hispanic = P0020002, Asian = P0020008, Black = P0020006, Native = P0020007, Nativepac = P0020009, Others = P0020010, Mixed = P0020011)
+```
+
+
+####2. Creating a new dataframe 
+Here I created a new dataframe called "censusstat" to store the information we need from the raw dataset. I took the existing precinct from the raw dataset and made it into a new column in "censusstat" dataframe without repetitive precinct numbers so that we can sum up the information of different census blocks that are from the same precinct.
+
+```{r}
+#Track the existing precinct data in the raw data set
+existingprecinct <- distinct(select(censusdata,precinct))
+#Record the total number of precinct
+precinctNumber <- length(existingprecinct) 
+#Create a new data frame to store cleaned data
+censusstat <- data.frame("Precinct" = existingprecinct)
+#Arrange the censusstat in ascending order with column "Precinct"
+censusstat <- arrange(censusstat,precinct)
+```
+
+####3.Calculating Population
+In this chunck, I basically sum up the population by race and ethnicity (Hispanic only) and store them in "censusstat" in corresponding to the precinct.  
+
+```{r}
+#Calculate the population for each race without incorperating hispanic. Take white as an example, the numbers in each column represent the population of non-hispanic white.
+#Since the data type of each column from the rawdata set is list instead of vector, I created a transitive dataframe called "popstat" to help me to store the result of each summation temporarily. 
+censusdata_df = tbl_df(censusdata)
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(Population = sum(Population))
+censusstat$Population <- unlist(popstat[2]) #transfer a list into a vector
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(White = sum(White))
+censusstat$White <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(Asian = sum(Asian))
+censusstat$Asian <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(Black = sum(Black))
+censusstat$Black <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(Hispanic= sum(Hispanic))
+censusstat$Hispanic<- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(Native = sum(Native))
+censusstat$Native<- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(Nativepac = sum(Nativepac))
+censusstat$Nativepac <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(Others = sum(Others))
+censusstat$Others <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(Mixed = sum(Mixed))
+censusstat$Mixed <- unlist(popstat[2])
+#Since "Native Indians"", "Native Islanders"" and "Others" have very small population, 
+#I combined these three catogries into one variable and call it "NativeOther".
+censusstat <- censusstat%>% mutate(NatvieOther =  Native + Nativepac + Others)
+
+#Calculate the population for each race incorperating hispanic. Again, the numbers in each column for white combine white and hispanic white.
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(HWhite = sum(HWhite))
+censusstat$HWhite <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(HAsian = sum(HAsian))
+censusstat$HAsian <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(HBlack = sum(HBlack))
+censusstat$HBlack <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(HNative = sum(HNative))
+censusstat$HNative<- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(HNativepac = sum(HNativepac))
+censusstat$HNativepac <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(HOthers = sum(HOthers))
+censusstat$HOthers <- unlist(popstat[2])
+popstat <- censusdata_df %>% group_by(precinct) %>% summarise(HMixed = sum(HMixed))
+censusstat$HMixed <- unlist(popstat[2])
+
+#Take the difference between hispanic and non-hispanic incorporated population to get the population of hispanic for each race.
+censusstat$HisWhite = censusstat$HWhite - censusstat$White
+censusstat$HisAsian = censusstat$HAsian - censusstat$Asian
+censusstat$HisBlack = censusstat$HBlack - censusstat$Black
+censusstat$HisNative = censusstat$HNative - censusstat$Native
+censusstat$HisNativepac = censusstat$HNativepac - censusstat$Nativepac
+censusstat$HisOthers = censusstat$HOthers - censusstat$Others
+censusstat$HisMixed = censusstat$HMixed - censusstat$Mixed
+censusstat <- censusstat%>% mutate(HisNatvieOther =  HisNative + HisNativepac + HisOthers)
+
+#Delete the orginal variables "Native Indians"", "Native Islanders"" and "Others".
+censusstat <- censusstat[-c(7:9, 12:18, 22:24)]
+censusstat <- rename(censusstat, Precinct = precinct)
+```
+
+4. Remove unnecessary data to free up memory and view the cleaned dataset.
+```{r}
+#remove unnecessary data
+rm(mydataURL, rawdata, existingprecinct, precinctNumber, censusdata, popstat, censusdata_df)
+View(censusstat)
+#setwd("/Users/Pinnzhang/Desktop")
+write.csv(censusstat, file = "NYC_2010_Census_Data_Cleaned.csv")
+```
+*The original dataset is downloaded from URL:
+    https://www.google.com/fusiontables/DataSource?dsrcid=767562#rows:id=1
+ The documentation of this dataset is accessible from URL(Page 64): 
+    https://www.documentcloud.org/documents/87708-pl94-171-1.html#document/p64
+
+
+In order to make this RMD file  reproducable, I downloaded the file and pushed it onto my github with an open access.
+    Github link for this dataset URL:
+    https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/NYC_Blocks_2010CensusData_Plus_Precincts.csv

@@ -1,0 +1,146 @@
+---
+title: "Clean St. Louis Schools Academic Performances"
+author: "Ibuki Ogasawara"
+date: "February 20, 2016"
+output: html_document
+---
+This R markdown file cleans the datasets of academic performance in St. Louis public schools in 2015. Before running the code, some initial steps are required. (See footnotes.)  
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(RCurl))install.packages("RCurl")
+library(RCurl) #getURL(download datasets from a website)
+if(!require(dplyr))install.packages("dplyr")
+library(dplyr) #summarize, arrange, select
+```
+
+####1. Download and Read Datasets from GitHub
+```{r}
+mydata <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/SLED%20Academic%20Performance/SLED_Acad_Perf.csv")
+SLED_ACAD_PERF <- read.csv(text = mydata, quote = "")
+
+#Check the names of the columns and renames them
+names(SLED_ACAD_PERF)
+names(SLED_ACAD_PERF) <- c("X", "School", "Subject", "Category", "Type", "GradedSub", "Year", "Accountable", "Participant", "Reportable", "LevelUnknown", "LevelUnknown_Pct", "BelowBasic", "BelowBasic_Pct", "Basic", "Basic_Pct", "Proficient", "Proficient_Pct", "Advanced", "Advanced_Pct", "MapIndex", "MeanScore", "MedianTerranova")
+```
+
+####2. Select Columns
+We will first select only the columns that we use. Namely: "School Name", "Content Area", "Accountable", "Reportable", "Below Basic", "Basic", "Proficient", "Advanced", "Mean Scale Score". 
+```{r}
+SLED_ACAD_Selected <- dplyr::select(SLED_ACAD_PERF, School, Subject, Accountable, Reportable, BelowBasic, Basic, Proficient, Advanced, MeanScore)
+```
+
+#####3. Filter the Data Frame
+We separate the data frames of overall resutls and of each school.
+```{r}
+#Overall results
+SLED_ACAD_Filtered1 <- filter(SLED_ACAD_Selected, School == '"State Overall"' | School == '"District Overall"')
+#Results by school
+SLED_ACAD_Filtered2 <- slice(SLED_ACAD_Selected, 35:488)
+```
+
+####4. Assign School Numbers
+We will assign school number to each school by extracting the nubmers in the parentheses in the "School" column.
+```{r}
+#Function that extracts the 6th last character through 3rd last character of characters. 
+substrRight_2 <- function(x){
+  substr(x, nchar(x)-5, nchar(x)-2)
+}
+#Apply the function and convert the output into numeric
+SLED_ACAD_Filtered2$SchNum <- as.numeric(substrRight_2(as.character(SLED_ACAD_Filtered2$School)))
+```
+
+####5. Replace NA with 0
+Now, we replace "NA" with 0 so that we can carry out computations later.
+```{r}
+SLED_ACAD_Filtered2[is.na(SLED_ACAD_Filtered2)] <- 0
+```
+
+####6. Reorder and Select the Data Frame
+- Bring the "SchNum" column to next to the "School"  
+* We also delete some rows(schools) that has only 0 in the cells.  
+        - 40: Beaumont CTE (1250)  
+        - 62-64: Carnahan Sch (1500)  
+        - 182-184: Gateway High (1220)  
+        - 378-380: Roosvelt High (1680)  
+        - 413:417: Vashon High (1830) and Sumner High (1800)
+```{r}
+SLED_ACAD_Reordered <- SLED_ACAD_Filtered2[, c("School", "SchNum", "Subject", "Accountable", "Reportable", "BelowBasic", "Basic", "Proficient", "Advanced", "MeanScore")]
+SLED_ACAD_Filtered3 <- SLED_ACAD_Reordered[-c(40, c(62:64), c(182:184), c(378:380), c(413:417)),]
+```
+
+####7. Compute Number of Students by Category
+Compute the means of the number of studnets in each category by school and subject.
+```{r}
+#Columns we want to group by
+grp_cols <- names(SLED_ACAD_Filtered3)[c(2, 3)] #Select "School" and "Subject"
+#Convert character vector to list of symbols
+dots <- lapply(grp_cols, as.symbol)
+
+Accountable_counts <- SLED_ACAD_Filtered3 %>%
+        group_by_(.dots=dots) %>%
+        summarise("Accountable" = sum(Accountable))
+Reportable_counts <- SLED_ACAD_Filtered3 %>%
+        group_by_(.dots=dots) %>%
+        summarise("Reportable" = sum(Reportable))
+BelowBasic_counts <- SLED_ACAD_Filtered3 %>%
+        group_by_(.dots=dots) %>%
+        summarise("BelowBasic" = sum(BelowBasic))
+Basic_counts <- SLED_ACAD_Filtered3 %>%
+        group_by_(.dots=dots) %>%
+        summarise("Basic" = sum(Basic))
+Proficient_counts <- SLED_ACAD_Filtered3 %>%
+        group_by_(.dots=dots) %>%
+        summarise("Proficient" = sum(Proficient))
+Advanced_counts <- SLED_ACAD_Filtered3 %>% 
+        group_by_(.dots=dots) %>%
+        summarise("Advanced" = sum(Advanced))
+MeanScore_sum <- SLED_ACAD_Filtered3 %>% 
+        group_by_(.dots=dots) %>%
+        summarise("MeanScore" = sum(MeanScore))
+```
+
+####8. Filter the Data Frame by Subject
+Now, we merge them and separate the table into "English", "Math", and "Science" and merge them again into one data frame at the end. 
+```{r}
+#Check if the tables have the same dimensions.
+sapply(list(Accountable_counts, Reportable_counts, BelowBasic_counts, Basic_counts, Proficient_counts, Advanced_counts, MeanScore_sum), dim)
+
+Merged_table <- cbind.data.frame(Accountable_counts, Reportable_counts[, 3], BelowBasic_counts[, 3], Basic_counts[, 3], Proficient_counts[, 3], Advanced_counts[, 3], MeanScore_sum[, 3])
+
+English <- filter(Merged_table, Subject=='"Eng. Language Arts"')
+Math <- filter(Merged_table, Subject=='"Mathematics"')
+Science <- filter(Merged_table, Subject=='"Science"')
+```
+
+####8.1. Rename the Data Frames Filtered by Subject
+Now, we will rename the columns with certain abbreviations
+Eng:English / Mat:Mathematics / Sci:Science
+Ac: Acountable / Re: Reportable / BB: BelowBasic / Ba: Basic / Pr:Proficient / Ad:Advanced / MS:MeanScore
+```{r}
+names(English) <- c("SchNum", "Subject", "EngAc", "EngRe",
+                    "EngBB", "EngBa", "EngPr", "EngAd", "EngMS")
+names(Math) <- c("SchNum", "Subject", "MatAc", "MatRe",
+                 "MatBB", "MatBa", "MatPr", "MatAd", "MatMS")
+names(Science) <- c("SchNum", "Subject", "SciAc", "SciRe",
+                    "SciBB", "SciBa", "SciPr", "SciAd", "SciMS")
+```
+
+####8.2 Merge the Data Frames
+Finally, we will merge them into one table. 
+```{r}
+SLED_ACAD_Cleaned <- cbind.data.frame(English[, -2], Math[, 3:9], Science[, 3:9])
+```
+
+####9. Save the Data Frame
+```{r}
+write.csv(SLED_ACAD_Cleaned, "SLED_Academic_Peformance_2015_Cleaned.csv")
+```
+
+#### Footnote:
+
+The original data source: Missouri Department of Elementary & Secondary Education   
+http://mcds.dese.mo.gov/guidedinquiry/Achievement%20Level%20%204%20Levels/Achievement%20Level%204%20Report%20-%20Public.aspx?rp:DistrictCode=048914  
+
+You can choose "School Year," "Content Area," "Category," etc that you are interested in.   
+The dataset has information about the academic performance of all the public schools in St. Louis City. 

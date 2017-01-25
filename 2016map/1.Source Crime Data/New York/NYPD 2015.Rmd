@@ -1,0 +1,217 @@
+---
+title: "NYPD Arrest Data Set Cleaning"
+author: Jarren Santos
+output: html_document
+---
+
+
+The following packages help with cleaning and tidying the dataset.
+```{r}
+if( !require(dplyr) ) install.packages("dplyr")
+require(dplyr) # The dplyr package gives us a majority of the tools to wrangle with the dataset and manipulate the data as needed.
+
+if( !require(RCurl) ) install.packages("RCurl")
+require(RCurl) # The RCurl package allows us to communicate with HTTP servers to obtain datasets from the internet.
+```
+
+
+# Reading in the NYPD 2015 Arrest Dataset
+
+1. Read in the NYPD Dataset for 2015 and preview it to get an idea with what you are working with.
+```{r}
+NYPDdata15 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/NYPD/NYPD_Crime_2015.csv")
+NYPD <- read.csv(text = NYPDdata15, quote = "") # We create a variable called "NYPD" and read in the NYPD Dataset for 2015.
+
+dim(NYPD) # The dim() function gives us the dimensions of our data (rows, columns).
+
+head(NYPD) # The head() function gives us a peek at the first few rows of the dataset.
+```
+
+
+We can create a data frame that gives us a better idea of how the variables are structured inside the dataset.  It includes information about the class of each variable.
+```{r}
+sfa <- tbl_df(NYPD)
+```
+
+
+# Previewing the Data
+
+2. The NYPD Dataset for 2015 contains a plethora of information about the stops, frisks, and arrests that have occurred throughout the precincts of New York.  Columns include information about date and time of incident, incidence of being stopped, sex of individual accused, race of individuals, arrested, and more.  
+
+Although having many data to work with is favorable, we want to clean our data to have the most pertinent information appear first.  We are interested in the following:
+* **Precinct (pct)**
+* **Total Stops**
+* **Total Frisks**
+* **Total Searches**
+* **Total Arrests**
+* **Age**
+* **Sex**
+        * **Total Males**
+        * **Total Females**
+* **Race**
+        * **Total White**: Population of White people in the precinct
+        * **Total Black**: Population of African-Americans in the precinct
+        * **Total AmNativ**: Popuation of American Indians in the precinct
+        * **Total Asian**: Population of Asians and Pacific Islanders in the precinct
+        * **Total Hispanic**: Population of Hispanic people in the precinct
+        * **Total Other**: Population of other people in the precinct including other and N/A
+
+
+We want to look at the total number of arrests within a precinct and compare that to the number of stops.  To start cleaning our dataset, select only the columns that contribute to the information of interest.
+```{r}
+NYPD1 <- select(sfa, year, pct, arstmade, arstoffn, age, sex, race, frisked, searched, datestop, timestop)
+NYPD2 <- filter(NYPD1, arstmade == "Y")
+
+rm("NYPD1")
+```
+
+
+We want to arrange our files using precinct to get a better idea of what is going on in each area.
+```{r}
+NYPD3 <- arrange(NYPD2, pct)
+
+rm("NYPD2")
+```
+
+
+# Cleaning the Data
+
+3. With our dataset arranged, let's investigate the arrest offenses made.  What are people being arrested for?  Let's find out.
+```{r}
+NYPDoffenses <- names(table(NYPD3$arstoffn))
+NYPDoffenses
+```
+
+
+Oh, there's 961 different offenses.  That doesn't sound like too much.  However, let's say that there's much more offenses, say 962 different ones.  We can go ahead and regroup these variables into six different categories: Assault, Contraband, Homicide, Larceny, Other, and Sex Offense.  This makes it easier to sort our data.  
+
+In order to do this, we took our NYPD3 dataset above and added a new column, "offenses", that groups each arrest offense into one of the categories listed above.
+```{r}
+NYPDedited <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/NYPD/NYPD%202015_edited.csv")
+NYPD3 <- read.csv(text = NYPDedited, quote = "")
+```
+
+
+We should now get the total number of each arrest offense so we can determine how many of each offense is within an individual precinct.
+```{r}
+# Crimetypes: Assault, Contraband, Homicide, Larceny, Other, Sex Offense
+
+NYPD3$Assault <- ifelse(NYPD3$offense == "assault", 1, 0);
+NYPD3$Contra <- ifelse(NYPD3$offense == "contraband", 1, 0);
+NYPD3$Homicide <- ifelse(NYPD3$offense == "homicide", 1, 0);
+NYPD3$Larceny <- ifelse(NYPD3$offense == "larceny", 1, 0);
+NYPD3$SexOff <- ifelse(NYPD3$offense == "sexoffense", 1, 0);
+NYPD3$OthrCrim <- ifelse(NYPD3$offense == "other", 1, 0);
+```
+
+
+4. We have to obtain the number of arrests, frisks, and searches.  To do this, we will create a column for these totals.
+```{r}
+NYPD3$Arrest <- ifelse(NYPD3$arstmade == "Y", 1, 0);
+NYPD3$Frisk <- ifelse(NYPD3$frisked == "Y", 1, 0);
+NYPD3$Search <- ifelse(NYPD3$searched == "Y", 1, 0);
+```
+
+
+5. We want to look at the average age of arrests per precinct as that might provide us with some valuable information. The age data in the original file has age stored as a factor, so we need to convert its class from factor to numeric.
+```{r}
+NYPD3$age <- as.numeric(as.character(NYPD3$age));
+```
+
+
+6. The original NYPD dataset has sex as a categorical variable, so let's clean that up a bit by separating the sex variable into "male" and "female".
+```{r}
+NYPD3$Male <- ifelse(NYPD3$sex == "M", 1, 0);
+NYPD3$Female <- ifelse(NYPD3$sex == "F", 1, 0);
+```
+
+
+7. The original NYPD dataset has race as a categorical variable, so let's clean that up a bit by creating a new column called "ethnicity" and storing the data there.
+```{r}
+NYPD3$Asian <- ifelse(NYPD3$race == "A", 1, 0);
+NYPD3$Black <- ifelse(NYPD3$race == "B", 1, 0);
+NYPD3$Native <- ifelse(NYPD3$race == "I", 1, 0);
+NYPD3$Hispanic <- ifelse(NYPD3$race == "P", 1, ifelse(NYPD3$race == "Q", 1, 0));
+NYPD3$White <- ifelse(NYPD3$race == "W", 1, 0);
+NYPD3$OthrRace <- ifelse(NYPD3$race == "X", 1, ifelse(NYPD3$race == "Z", 1, 0));
+```
+
+
+# Organizing the Dataset for Presentation
+
+8. Count the total population of each race in the arrests dataset.
+```{r}
+Arrests_counts <- group_by(NYPD3, pct) %>%
+        summarize("Arrest" = sum(Arrest))
+Frisks_counts <- group_by(NYPD3, pct) %>%
+        summarize("Frisk" = sum(Frisk))
+Searches_counts <- group_by(NYPD3, pct) %>%
+        summarize("Search" = sum(Search))
+Age_averages <- group_by(NYPD3, pct) %>%
+        summarize("Age" = round(mean(age, na.rm=TRUE), digits = 2))
+Male_counts <- group_by(NYPD3, pct) %>%
+        summarize("Male" = sum(Male))
+Female_counts <- group_by(NYPD3, pct) %>%
+        summarize("Female" = sum(Female))
+Asian_counts <-  group_by(NYPD3, pct) %>%
+        summarize("Asian" = sum(Asian))
+Black_counts <-  group_by(NYPD3, pct) %>%
+        summarize("Black" = sum(Black))
+Native_counts <-  group_by(NYPD3, pct) %>%
+        summarize("Native" = sum(Native))
+Hispanic_counts <-  group_by(NYPD3, pct) %>%
+        summarize("Hispanic" = sum(Hispanic))
+White_counts <-  group_by(NYPD3, pct) %>%
+        summarize("White" = sum(White))
+OtherRace_counts <-  group_by(NYPD3, pct) %>%
+        summarize("OthrRace" = sum(OthrRace))
+Assault_counts <- group_by(NYPD3, pct) %>%
+        summarize("Assault" = sum(Assault))
+Contraband_counts <- group_by(NYPD3, pct) %>%
+        summarize("Contra" = sum(Contra))
+Homicide_counts <- group_by(NYPD3, pct) %>%
+        summarize("Homicide" = sum(Homicide))
+Larceny_counts <- group_by(NYPD3, pct) %>%
+        summarize("Larceny" = sum(Larceny))
+SexOffense_counts <- group_by(NYPD3, pct) %>%
+        summarize("SexOff" = sum(SexOff))
+OtherCrimes_counts <- group_by(NYPD3, pct) %>%
+        summarize("OthrCrim" = sum(OthrCrim))
+```
+
+
+9. Let's finish up by creating a data frame with all of the counts for the races.
+```{r}
+existingPCT <- unique(NYPD3$pct)
+PCT <- sort(existingPCT)
+Arrests_NYPD_2015 <- data.frame("Precinct" = PCT,
+                                "Arrest" = Arrests_counts[ , 2],
+                                "Frisk" = Frisks_counts[ , 2],
+                                "Search" = Searches_counts[ , 2],
+                                "Male" = Male_counts[ , 2],
+                                "Female" = Female_counts[ , 2],
+                                "Age" = Age_averages[ , 2],
+                                "Asian" = Asian_counts[ , 2],
+                                "Black" = Black_counts[ , 2],
+                                "Native"=Native_counts[ , 2],
+                                "Hispan" = Hispanic_counts[ , 2],
+                                "White" = White_counts[ , 2],
+                                "OthrRace" = OtherRace_counts[ , 2],
+                                "Assault" = Assault_counts[ , 2],
+                                "Contra" = Contraband_counts[ , 2],
+                                "Homicide" = Homicide_counts[ , 2],
+                                "Larceny" = Larceny_counts[ , 2],
+                                "SexOff" = SexOffense_counts[ , 2],
+                                "OthrCrim" = OtherCrimes_counts[ ,2])
+```
+
+
+# Viewing the Dataset
+
+10. Let's rename some variables so they better reflect the year of these arrests.  Afterwards, observe what your dataset looks like!
+```{r}
+names(Arrests_NYPD_2015) <- c("Precinct", "Arrest15", "Frisk15", "Search15", "Male15", "Female15", "Age15", "Asian15", "Black15", "Native15", "Hispanic15", "White15", "OthrRace15", "Asslt15", "Contra15", "Homici15", "Larcen15", "SexOff15", "OthrCr15")
+
+View(Arrests_NYPD_2015)
+write.csv(Arrests_NYPD_2015, "NYPD_Arrest_Data_2015.csv")
+```

@@ -1,0 +1,113 @@
+---
+title: "Clean New York City Public Schools Point Shapefile"
+author: "Ibuki Ogasawara"
+date: "March 10, 2016"
+output: html_document
+---
+This R markdown file cleans and add attribute table to the New York City public schools point shapefile in 2012.
+
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(maptools))install.packages("maptools")
+library(maptools) #readShapeSpatial (read shapefile)
+if(!require(rgdal))install.packages("rgdal")
+library(rgdal) #spTransform (transforms the coordinate system)
+if(!require(spdep))install.packages("spdep")
+library(spdep) #order (order spatial information by attributes)
+```
+
+####1. Download and Check the Properties of the Shapefile
+```{r message=FALSE}
+#The shapefile is downloaded from Data.gov (https://catalog.data.gov/dataset/schools-k-12-mo-2012-public-schools-shp). 
+zipurl <- "https://data.cityofnewyork.us/download/jfju-ynrr/application/zip"
+
+#The function is take from the following website: https://dzone.com/articles/function-batch-downloading
+url_shp_to_spdf <- function(URL) {
+ 
+  require(rgdal)
+ 
+  wd <- getwd()
+  td <- tempdir()
+  setwd(td)
+ 
+  temp <- tempfile(fileext = ".zip")
+  download.file(URL, temp)
+  unzip(temp)
+ 
+  shp <- dir(tempdir(), "*.shp$")
+  lyr <- sub(".shp$", "", shp)
+  y <- lapply(X = lyr, FUN = function(x) readOGR(dsn=shp, layer=lyr))
+  names(y) <- lyr
+ 
+  unlink(dir(td))
+  setwd(wd)
+  return(y)
+}
+#Run the funciton with the "zipurl"
+y <- url_shp_to_spdf(zipurl)
+z <- unlist(unlist(y))
+#Define the shapefile in the output. 
+NYC_Sch <- z$`Public_Schools_Points_2011-2012A`
+#Check what fields that this shapefile has. 
+names(NYC_Sch)
+#Check the original length of the shapefile
+length(NYC_Sch)
+```
+
+####2. Select Attributes
+First, remove columns that we do not need and keep only "ATS_CODE," "SCHOOLNAME" and "SCH_TYPE", and rename the columns. 
+```{r}
+NYC_SCH_Reduced <- NYC_Sch[, -c(c(2:4),c(7:18))]
+names(NYC_SCH_Reduced)
+names(NYC_SCH_Reduced) <- c("DBN", "School", "SchoolType")
+```
+
+####3. Check the Key Field
+Order the shapefile by key field (DBN)
+```{r}
+NYC_SCH_Ordered <- NYC_SCH_Reduced[order(NYC_SCH_Reduced$DBN),]
+NYC_SCH_Ordered@data$DBN <- as.character(NYC_SCH_Ordered@data$DBN)
+```
+
+##### Important Note:
+Unlike, St. Louis, there are alomst 2000 school points in this shapefile. Therefore, searching for all the schools that no longer exist now but did in the past seems to be the unresonable amount of work. Although this shapefile is only accurate for 2011 to 2012, we decided to apply this shapefile from 2006 to 2015. That means, if a school in the dataframes we cleaned had been closed before 2011 or newly established after 2012 is going to be excluded from our research. 
+
+####4.0 Clean Key Field - Check the Situation - 
+We noticed that the key field (DBN column) in the shapefile has some issues when it comes to the join. We found out that many of the DBNs have invisible spaces after the 6 characters of DBN. For example, 
+```{r eval=FALSE}
+NYC_SCH_Ordered@data[1,1]
+#[1] "00Q321" *This one does not have spaces. 
+NYC_SCH_Ordered@data[2,1]
+#[1] "01M015     " *This one does. 
+x <- NYC_SCH_Ordered@data[2,1]
+nchar(x)
+#[1] 12
+```
+
+####4.1 Clean Key Field - Delete Blank Spaces - 
+Although, we did not check every DBNs, it seems that the spaces come after the DBNs if they exists. So, we extract the first 6 characters from the column and put them back into the column as factors. 
+```{r}
+NYC_SCH_Cleaned_DBN <- NYC_SCH_Ordered
+Cleaned_DBN <- substr(NYC_SCH_Cleaned_DBN@data$DBN, 1, 6)
+NYC_SCH_Cleaned_DBN@data$DBN <- as.factor(Cleaned_DBN)
+```
+
+####5. Reproject and Transform the Shapefile
+```{r}
+#Open the projection folder in the shapefile (.prj) and find the projection code in the following website:
+# http://downloads.esri.com/support/documentation/ims_/Support_files/elements/pcs.htm
+#In this case, it is 102718 (UTM)
+proj4string(NYC_SCH_Cleaned_DBN) <- CRS("+init=esri:102718")
+#epsg:4326 is for latitude and longitude coordinate system.
+NYC_SCH_Cleaned_DBN_LatLong <- spTransform(NYC_SCH_Cleaned_DBN, CRS("+init=epsg:4326"))
+
+writeSpatialShape(NYC_SCH_Cleaned_DBN_Latlong, "NYC_School_Shapefile_Cleaned") 
+```
+
+#### Footnote:
+The New York City Public School Point Shapefile is obtained from NYC OpenData:  
+https://data.cityofnewyork.us/Education/School-Point-Locations/jfju-ynrr  
+
+The function that allows us to directly download the shapefile from the website is copied from the following website:  
+https://dzone.com/articles/function-batch-downloading

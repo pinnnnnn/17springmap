@@ -1,0 +1,46 @@
+---
+title: "Join New York School Data 2015"
+author: "Ibuki Ogasawara"
+date: "May 18, 2016"
+output: html_document
+---
+
+This R markdown file joins the school data in St. Louis that is for 2015 by subsetting and merging the cleaned datasets in "Initial Clean Data" folder
+```{r}
+if(!require(dplyr)) install.packages("dplyr")
+library(dplyr) #filter, select
+```
+
+####1. Read Datasets
+```{r}
+NYED_DEMO_15 <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/New York/NYED_Demographics_2015_Cleaned.csv")
+NYED_ELA_15 <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/New York/NYED_ELA_2015_Cleaned.csv")
+NYED_MAT_15 <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/New York/NYED_MAT_2015_Cleaned.csv")
+NYED_GRAD_15 <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/4. Initial Clean Data/New York/NYED_Graduation_Rate_2015_Cleaned.csv")
+```
+
+
+####2. Choose the Columns
+```{r}
+#use "select" to choose the columns we need
+DEMO_15_Selected <- dplyr::select(NYED_DEMO_15, DBN, Total, Female, Male, Asian, Black, Hispanic, White, Other, SWD, ELL, Poverty)
+
+ELA_15_Selected <- dplyr::select(NYED_ELA_15, DBN, NumTest, NumTest5th, MeanScore, MeanScore5th, L1Num, L1Num5th, L2Num, L2Num5th, L3Num, L3Num5th, L4Num, L4Num5th, L34Num, L34Num5th, L34Pct, L34Pct5th, Improv, Improv5th)
+
+MAT_15_Selected <- dplyr::select(NYED_MAT_15, DBN, NumTest, NumTest5th, MeanScore, MeanScore5th, L1Num, L1Num5th, L2Num, L2Num5th, L3Num, L3Num5th, L4Num, L4Num5th, L34Num, L34Num5th, L34Pct, L34Pct5th, Improv, Improv5th)
+
+GRAD_15_Selected <- dplyr::select(NYED_GRAD_15, DBN,Total4, TotalGrad4, AllRegents4, AdvRegents4, Local4, StillEnroll4, DropOut4, Total6, TotalGrad6, AllRegents6, AdvRegents6, Local6, StillEnroll6, DropOut6)
+```
+
+####3. Merge the Datasets
+```{r}
+NYC_SCH_2015_1 <- full_join(DEMO_15_Selected, ELA_15_Selected, by='DBN')
+NYC_SCH_2015_2 <- full_join(NYC_SCH_2015_1, MAT_15_Selected, by='DBN')
+NYC_SCH_2015_3 <- full_join(NYC_SCH_2015_2, GRAD_15_Selected, by='DBN')
+
+names(NYC_SCH_2015_3) <- c("DBN","Total","Female","Male","Asian","Black","Hispanic","White","Other","SWD","ELL","Poverty","NmTsELA","NmTs5ELA","MSELA","MS5ELA","L1NmELA","L1Nm5ELA","L2NmELA","L2Nm5ELA","L3NmELA","L3Nm5ELA","L4NmELA","L4Nm5ELA","L34NmELA","L34Nm5ELA","L34PcELA","L34Pc5ELA","ImprvELA","Imprv5ELA","NmTsMAT","NmTs5MAT","MSMAT","MS5MAT","L1NmMAT","L1Nm5MAT","L2NmMAT","L2Nm5MAT","L3NmMAT","L3Nm5MAT","L4NmMAT","L4Nm5MAT","L34NmMAT","L34Nm5MAT","L34PcMAT","L34Pc5MAT","ImprvMAT","Imprv5MAT","Total4","TtlGrad4","AllReg4","AdvRegs4","Local4","StlEnrl4","DropOut4","Total6","TtlGrad6","AllReg6","AdvRegs6","Local6","StlEnrl6","DropOut6")
+
+write.csv(NYC_SCH_2015_3, "NYC_School_Data_2015.csv")
+```
+
+

@@ -1,0 +1,203 @@
+---
+title: "Clean St. Louis Public School Information Shapefile"
+author: "Ibuki Ogasawara"
+date: "February 29, 2016"
+output: html_document
+---
+This R markdown file cleans and transforms the point shapefile of neighborhoods in St. Louis. 
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(maptools))install.packages("maptools")
+library(maptools) #readShapeSpatial (read shapefile)
+if(!require(rgdal))install.packages("rgdal")
+library(rgdal) #spTransform (transforms the coordinate system)
+```
+
+####1. Download and Check the Properties of the Shapefile
+```{r message=FALSE}
+#The shapefile is downloaded from Data.gov (https://catalog.data.gov/dataset/schools-k-12-mo-2012-public-schools-shp). 
+zipurl <- "ftp://msdis.missouri.edu/pub/Facilities_Structures/MO_2012_Public_Schools_shp.zip"
+
+#The function is take from the following website: https://dzone.com/articles/function-batch-downloading
+url_shp_to_spdf <- function(URL) {
+ 
+  require(rgdal)
+ 
+  wd <- getwd()
+  td <- tempdir()
+  setwd(td)
+ 
+  temp <- tempfile(fileext = ".zip")
+  download.file(URL, temp)
+  unzip(temp)
+ 
+  shp <- dir(tempdir(), "*.shp$")
+  lyr <- sub(".shp$", "", shp)
+  y <- lapply(X = lyr, FUN = function(x) readOGR(dsn=shp, layer=lyr))
+  names(y) <- lyr
+ 
+  unlink(dir(td))
+  setwd(wd)
+  return(y)
+}
+#Run the funciton with the "zipurl"
+y <- url_shp_to_spdf(zipurl)
+z <- unlist(unlist(y))
+#Define the shapefile in the output. 
+MO_Sch <- z$MO_2012_Public_Schools_shp
+#subset the shapefile by "CtyDist" so that we only have the points in the city of St. Louis
+SLC_sch <- MO_Sch[MO_Sch$CtyDist=="115115",]
+#Check what fields that this shapefile has. 
+names(SLC_sch)
+#Check the key field of joining dataset. 
+SLC_sch$SchNum
+#Check the original length of the shapefile
+length(SLC_sch)
+```
+
+####2. Select Attributes
+First, remove columns that we do not need and keep only "SchNum" and the names of "Facility"
+```{r}
+SL_SCH_Reduced <- SLC_sch[, -c(1,3,c(5:23))]
+```
+
+####3.0. Add Points - Identify Schools That Need to Be Added - 
+Now, we will start adding spacial points to the shapefile because it does not include the schools that have been closed before 2012 or has been established after 2012. 
+```{r message=FALSE}
+#First, we need to identify which points are need to be added. 
+SLED_Demographic <- read.csv("/data/home/graphics/MAP_16_Spring/Final/4. Initial Clean Data/SLED_Demographic_Cleaned.csv")
+```
+
+####3.1. Add Points - Create a List of Missing Schools - 
+We create a list of schools that DO NOT consistently appear in the St. Louis public schools demographic dataset through out the years (2008-2015) because they are the ones that are likely not to be in the shapefile. 
+```{r results=FALSE}
+table(SLED_Demographic$SCHOOL_NAME)
+```
+Now, we search for UTM coordinate for the schools that are missing.   
+Search for the info using  http://www.publicschoolreview.com/ and "google map" and  
+http://www.mappingsupport.com/p/recreation/utm_coordinates_topo_map.html and http://www.geoplaner.com/
+
+ACAD OF ENVT SCI/MATH ELEM (4990):exists in shapefile
+ACAD OF ENVT SCI/MATH MIDDLE (3250):exists in shapefile
+BADEN ELEM. (4080):closed 2010 738854.1/4287327
+BIG PICTURE ELEM. ALT. (1021): closed 2010 735553.1/4281711
+BIG PICTURE MIDDLE & HIGH @ NW (1023): closed 2012 740434.1/4278198
+BIG PICTURE MIDDLE ALT. (1022): closed 2010 740520.1/4282681
+BLEWETT MIDDLE (3020): closed 2010 743390.1/4280960
+BLOW MIDDLE (3040): closed 2009 739030.1/4270954
+BUNCHE INTERNATIONAL STUDIES (3110): New? 744161.1/4277931
+CLARK ELEM. (4320): New? Outside of the city area.
+COLLEGIATE SCHOOL OF MED/BIO (1510):exists in shapefile
+GALLAUDET SCH. FOR DEAF ELEM. (4720): closed 2012 740432.1/4278051
+GRISCOM JUVENILE DETENTION CTR (1015): It exists now 740595.1/4280936
+GUNDLACH ELEM. (4760): closed 2009 737940.1/4284457
+HUMBOLDT ACAD OF HIGHER LRNING (4960):exists in shapefile
+L'OUVERTURE MIDDLE (3280):exists in shapefile
+MARK TWAIN ELEM. (5280): New? Outside of the city area.
+MCKINLEY/CLASSICAL JR. ACAD. (3130): Same building as MCLA 742120.1/4277159
+MITCHELL ELEM. (5540): closed 2009 Same building as KIPP Victory Academy? 736694.1/4282550
+NORTHWEST MIDDLE (3310): closed 2010 Same building as NW Acad of Law 738651.1/4287176
+ROOSEVELT 9TH GRADE CTR. (1640):closed 2010 743188.1/4276215
+SCRUGGS ELEM. (5740): closed 2010 739662.1/4273410
+SHEPARD ELEM. (5820): closed 2010 742985.1/4275099
+SHERMAN ELEM. COMM. ED. CTR. (5840):exists in shapefile
+SIMMONS ELEM. (5880): closed 2010 740321.1/4282981
+STOWE PREPARATORY JR. HIGH (2070): closed 2010 736845.1/4284089
+THE COLLEGE PREPARATORY HIGH (1550):exists in shapefile
+VASHON 9TH GRADE CTR. (1600): closed 2009 740941.1/4282162
+WYMAN ELEM. (6140): Unsure, New? 740604.1/4278183
+
+####3.2. Add Points - Add Table and Coordinates - 
+We have to add the table and spacial information separately. 
+```{r}
+#create additional rows for "SL_SCH_Reduced@data". 
+Additional_Schools <- as.data.frame(rbind(c(4080, "Baden Elem"),
+                                          c(1021, "Big Picture Elem Alt"),
+                                          c(1023, "Big Picture Middle & High"),
+                                          c(1022, "Big Picture Middle Alt"),
+                                          c(3020, "Blewett Middle"),
+                                          c(3040, "Blow Middle"),
+                                          c(3110, "Bunche Intl Studies"),
+                                          c(4720, "Gallaudet Sch for Deaf Elem"),
+                                          c(1015, "Griscom Juvenile Detention CTR"),
+                                          c(4760, "Gundlach Elem"),
+                                          c(3130, "McKinley/Classical JR. Acad"),
+                                          c(5540, "Mitchell Elem"),
+                                          c(3310, "Northwest Middle"),
+                                          c(1640, "Roosevelt 9th Grade CTR"),
+                                          c(5740, "Scruggs Elem"),
+                                          c(5820, "Shepard Elem"),
+                                          c(5880, "Simmons Elem"),
+                                          c(2070, "Stowe Preparatory JR. High"),
+                                          c(1600, "Vashon 9th Grade CTR"),
+                                          c(6140, "Wyman Elem")))
+
+#Name the columns same as the ones in the shapefile. 
+names(Additional_Schools) <- c("SchNum", "Facility")
+
+#create additional rows for "SL_SCH_Reduced@coords"
+Additional_Points <- as.matrix(rbind(as.numeric(c(738854.1,4287327)),
+                                      as.numeric(c(735553.1,4281711)),
+                                      as.numeric(c(740434.1,4278198)),
+                                      as.numeric(c(740520.1,4282681)),
+                                      as.numeric(c(743390.1,4280960)),
+                                      as.numeric(c(739030.1,4270954)),
+                                      as.numeric(c(744161.1,4277931)),
+                                      as.numeric(c(740432.1,4278051)),
+                                      as.numeric(c(740595.1,4280936)),
+                                      as.numeric(c(737940.1,4284457)),
+                                      as.numeric(c(742120.1,4277159)),
+                                      as.numeric(c(736694.1,4282550)),
+                                      as.numeric(c(738651.1,4287176)),
+                                      as.numeric(c(743188.1,4276215)),
+                                      as.numeric(c(739662.1,4273410)),
+                                      as.numeric(c(742985.1,4275099)),
+                                      as.numeric(c(740321.1,4282981)),
+                                      as.numeric(c(736845.1,4284089)),
+                                      as.numeric(c(740941.1,4282162)),
+                                      as.numeric(c(740604.1,4278183))))
+#Add the coordinate matrix to the existed spacial information.
+SL_SCH_Reduced@coords <- rbind(SL_SCH_Reduced@coords, Additional_Points)
+#Add the dataframe to the attribute table.
+SL_SCH_Reduced@data <- rbind(SL_SCH_Reduced@data, Additional_Schools)
+#Check the result. 
+tail(SL_SCH_Reduced@data)
+#"SL_SCH_Full" has all the school points possible from 2008 to 2015. 
+SL_SCH_Full <- SL_SCH_Reduced
+#Check the points that are added. 
+plot(SLC_sch)
+plot(SL_SCH_Full)
+```
+
+####4. Reproject and Transform the Shapefile
+```{r}
+#Open the projection folder in the shapefile (.prj) and find the projection code in the following website:
+# http://downloads.esri.com/support/documentation/ims_/Support_files/elements/pcs.htm
+#In this case, it is 26915 (UTM)
+proj4string(SL_SCH_Full) <- CRS("+init=esri:26915")
+#epsg:4326 is for latitude and longitude coordinate system.
+SL_SCH_Full_LatLong <- spTransform(SL_SCH_Full, CRS("+init=epsg:4326"))
+
+#We want "SchNum" column to be numeric for later use.
+SL_SCH_Full_LatLong@data$SchNum <- as.numeric(SL_SCH_Full_Latlong@data$SchNum)
+```
+
+####5. Save the Point Shapefile
+```{r}
+#Create a folder named "SL_SCH_2008_Full_shp" in the working directry 
+writeSpatialShape(SL_SCH_Full_LatLong, "SL_School_Shapefile_Cleaned")
+```
+
+
+#### Footnote:
+
+The St. Louis Public School Point Shapefile is obtained from DATA.GOV:  
+https://catalog.data.gov/dataset/schools-k-12-mo-2012-public-schools-shp
+
+The function that allows us to directly download the shapefile from the website is copied from the following website:  
+https://dzone.com/articles/function-batch-downloading
+
+
+
+

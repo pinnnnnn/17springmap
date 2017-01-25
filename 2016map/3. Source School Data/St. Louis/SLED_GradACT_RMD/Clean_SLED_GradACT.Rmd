@@ -1,0 +1,69 @@
+---
+title: "Clean St. Louis Public Schools Graduation Rate and ACT Score"
+author: "Ibuki Ogasawara"
+date: "February 19, 2016"
+output: html_document
+---
+This R markdown file cleans the datasets of graduation rate and ACT score of St. Louis public schools from 2010 to 2015. Before running the code, some initial steps are required. (See footnotes.) 
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(RCurl))install.packages("RCurl")
+library(RCurl) #getURL(download datasets from a website)
+if(!require(dplyr))install.packages("dplyr")
+library(dplyr) #summarize, arrange, select
+```
+
+####1. Download and Read Datasets from GitHub
+```{r message=FALSE}
+mydata <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/SLED%20Grad%20Rate%20and%20ACT/SLED_GradRate_ACT.csv")
+SLED_GradACT <- read.csv(text = mydata, quote = "")
+```
+
+####2. Add School Numbers
+First, we will add a column that indicates the school numbers. We needed to do this by hand. 
+```{r message=FALSE}
+SLED_GradACT_Arranged <- arrange(SLED_GradACT, DISTRICT_NAME2)
+table(SLED_GradACT_Arranged$DISTRICT_NAME2)
+SLED_GradACT_Arranged$SchNum <- c(rep(1250, 6), rep(1500, 6), rep(1860, 6),
+                         rep(1440, 6), rep(1220, 6), rep(1570, 4),
+                         rep(1560, 6), rep(1100, 6), rep(1680, 6),
+                         rep(1730, 6), rep(1800, 6), rep(1550, 2),
+                         rep(1540, 4), rep(1830, 6))
+```
+
+####3. Converty Factor into Numeric (percentage)
+We will store the "PERCENT_TESTED" column as numeric values by getting rid of "%". 
+```{r}
+#Function that extracts the first character through 2nd last character of characters.
+substr_percent <- function(x){
+  substr(x, 1, nchar(x)-1)
+}
+SLED_GradACT_Arranged$PERCENT_TESTED <- as.numeric(substr_percent(as.character(SLED_GradACT_Arranged$PERCENT_TESTED)))
+```
+
+####4. Arrage by Year and School Number
+Lastly, we will arrange by year and school number. 
+```{r}
+#Move two of the columns "SchNum" and "TOTAL" so that the table makes more sense. 
+SLED_GradACT_Reordered <- SLED_GradACT_Arranged[, c("year","DISTRICT_NAME2","SchNum","NUM_GRAD",
+                                                    "NUM_GRAD_NAT","PERCENT_TESTED","ACT_SCORE")] 
+#Finally, we will arrange the rows. 
+SLED_GradACT_Arranged2 <- arrange(SLED_GradACT_Reordered, year, SchNum)
+names(SLED_GradACT_Arranged2) <- c("Year", "District", "SchNum", "GradNum", "GradAboveNatAve", "PercentTested", "ACTScore")
+```
+
+####5. Save the Data Frame
+```{r}
+write.csv(SLED_GradACT_Arranged2, "SLED_Graduation_Rate_ACT_Cleaned.csv")
+```
+
+#### Footnote:
+
+The original data source: Missouri Department of Elementary & Secondary Education
+
+http://mcds.dese.mo.gov/quickfacts/SitePages/DistrictInfo.aspx?ID=__bk8100130013005300130013005300
+
+Under "ST. LOUIS CITY -- Performance Data", "ACT Results" - "Building"
+
+The dataset has information about the high schools graducation rates and ACT scores in St. Louis City.

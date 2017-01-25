@@ -1,0 +1,214 @@
+---
+title: "Clean New York City Public Schools ELA Performance"
+author: "Ibuki Ogasawara"
+date: "March 6, 2016"
+output: html_document
+---
+This R markdown file cleans the datasets of ELA test performance of New York City public schools from 2006 to 2015. Before running the code, some initial steps are required. (See footnotes.) 
+
+####0. Install Required Packages
+```{r message=FALSE}
+if(!require(RCurl))install.packages("RCurl")
+library(RCurl) #getURL(download datasets from a website)
+if(!require(dplyr))install.packages("dplyr")
+library(dplyr) #summarize, arrange, select, filter
+```
+
+####1. Download and Read Datasets from GitHub
+```{r message=FALSE}
+mydata1 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/NYC%20Academic%20Perfomance/NYC_ELA_06-12.csv")
+NYED_ELA_PERF_0612 <- read.csv(text = mydata1, quote = "")
+
+mydata2 <- getURL("https://raw.githubusercontent.com/pinnnnnn/MAP_Spring_2016/master/NYC%20Academic%20Perfomance/NYC_ELA_13-15.csv")
+NYED_ELA_PERF_1315 <- read.csv(text = mydata2, quote = "")
+
+names(NYED_ELA_PERF_0612)
+names(NYED_ELA_PERF_0612) <- c("DBN", "Grade", "Year", "Category", "NumTest", "MeanScore", "L1Num", "L1Pct", "L2Num", "L2Pct","L3Num", "L3Pct","L4Num", "L4Pct","L34Num", "L34Pct")
+names(NYED_ELA_PERF_1315)
+names(NYED_ELA_PERF_1315) <- c("DBN", "School", "Grade", "Year", "Category", "NumTest", "MeanScore", "L1Num", "L1Pct", "L2Num", "L2Pct","L3Num", "L3Pct","L4Num", "L4Pct","L34Num", "L34Pct")
+```
+
+####2. Select Columns
+```{r}
+#Select the columns that we will use. 
+NYED_ELA_PERF_0612 <- select(NYED_ELA_PERF_0612, DBN, Grade, Year, NumTest, MeanScore, L1Num, L2Num, L3Num, L4Num, L34Num, L34Pct) #"Category" and all the percentages except for Level3+4 are excluded
+NYED_ELA_PERF_1315 <- select(NYED_ELA_PERF_1315, DBN, School, Grade, Year, NumTest, MeanScore, L1Num, L2Num, L3Num, L4Num, L34Num, L34Pct) #"Category", and all the percentages except for Level3+4 are excluded
+```
+
+####3. Filter by Year
+Now, we will divide the dataset by years. 
+```{r}
+ELA_2006 <- filter(NYED_ELA_PERF_0612, Year=="2006")
+ELA_2007 <- filter(NYED_ELA_PERF_0612, Year=="2007")
+ELA_2008 <- filter(NYED_ELA_PERF_0612, Year=="2008")
+ELA_2009 <- filter(NYED_ELA_PERF_0612, Year=="2009")
+ELA_2010 <- filter(NYED_ELA_PERF_0612, Year=="2010")
+ELA_2011 <- filter(NYED_ELA_PERF_0612, Year=="2011")
+ELA_2012 <- filter(NYED_ELA_PERF_0612, Year=="2012")
+ELA_2013 <- filter(NYED_ELA_PERF_1315, Year=="2013")
+ELA_2014 <- filter(NYED_ELA_PERF_1315, Year=="2014")
+ELA_2015 <- filter(NYED_ELA_PERF_1315, Year=="2015")
+```
+
+####4. Compute Mean Score and Improvement
+We will use the rows of "5"th grade and "All Grades" to measuare the performance of each school.
+From 2006 to 2010, the "MeanScore"s for "All Grades" are missing. So use "group_by" to compute the the values. 
+Also, we will compute the "improvement" by taking the differences in the percentages of proficient students in comparison to 2006.  
+```{r}
+#2006
+#Exclude the rows with "All Grades"
+ELA_06_Filtered <- filter(ELA_2006, Grade=="3"|Grade=="4"|Grade=="5"|Grade=="6"|Grade=="7"|Grade=="8") 
+#First, we compute "MeanScore" for "All Grades"
+#convert "factor" into "numeric"
+ELA_06_Filtered$MeanScore <- as.numeric(as.character(ELA_06_Filtered$MeanScore))
+#Since "MeanScore" includes the character "s"s, "as.numeric" will produce "NA"s. 
+MS_06 <- ELA_06_Filtered %>%
+        group_by(DBN) %>%
+        summarise("MS" = round(mean(MeanScore, na.rm=TRUE), digits=0))
+ELA_06_AllG <- filter(ELA_2006, Grade=="All Grades")
+#Arrange the datasets by DBN just in case
+ELA_06_AllG <- arrange(ELA_06_AllG, DBN)
+MS_06 <- arrange(MS_06, DBN)
+#Add MS_06 to ELA_06_AllG
+ELA_06_AllG$MeanScore <- MS_06[, 2]
+names(ELA_06_AllG)[5] <- "MeanScore"
+dim(ELA_06_AllG)
+#Now, compute the "improvements"
+ELA_06_AllG$Improv_AllG <- as.numeric(as.character(ELA_06_AllG$L34Pct))-as.numeric(as.character(ELA_06_AllG$L34Pct))
+```
+
+####5. Filter 5th Grade
+```{r}
+#Now, create the columns of 5th grade results
+ELA_06_5th_Filtered <- filter(ELA_2006, Grade=="5")
+ELA_06_5th_Arranged <- arrange(ELA_06_5th_Filtered, DBN)
+dim(ELA_06_5th_Arranged)
+#Get rid of unnecessary columns.
+ELA_06_5th_Reduced <- ELA_06_5th_Arranged[, -c(2,3)] #"Grade" and "Year" columns. 
+#Now, compute the "improvements"
+ELA_06_5th_Reduced$Improv5th <- as.numeric(as.character(ELA_06_5th_Reduced$L34Pct)) - as.numeric(as.character(ELA_06_5th_Reduced$L34Pct))
+```
+
+####6. Join All Grade and 5th Grade Results
+```{r}
+#Change names of the columns for the join. 
+names(ELA_06_5th_Reduced) <- c("DBN", "NumTest5th", "MeanScore5th", "L1Num5th", "L2Num5th", "L3Num5th", "L4Num5th", "L34Num5th", "L34Pct5th", "Improv5th")
+ELA_06_AllG_5th <- merge(ELA_06_AllG, ELA_06_5th_Reduced, by="DBN", all=TRUE)
+
+#Finally, we remove "Grade" and "Year" columns, and reorder/renames the columns. 
+ELA_06_AllG_5th_Selected <- select(ELA_06_AllG_5th, DBN, NumTest, NumTest5th, MeanScore, MeanScore5th, L1Num, L1Num5th, L2Num, L2Num5th, L3Num, L3Num5th, L4Num, L4Num5th, L34Num, L34Num5th, L34Pct, L34Pct5th, Improv_AllG, Improv5th)
+names(ELA_06_AllG_5th_Selected) <- c("DBN", "NumTest", "NumTest5th", "MeanScore", "MeanScore5th", "L1Num", "L1Num5th", "L2Num", "L2Num5th", "L3Num", "L3Num5th", "L4Num", "L4Num5th", "L34Num", "L34Num5th", "L34Pct", "L34Pct5th", "Improv", "Improv5th")
+dim(ELA_06_AllG_5th_Selected)
+```
+
+####7. Check the Class of Variables
+Check if we need to change the class of the columns. 
+```{r}
+list_of_columns <- list(ELA_06_AllG_5th_Selected$DBN, ELA_06_AllG_5th_Selected$NumTest, ELA_06_AllG_5th_Selected$NumTest5th, ELA_06_AllG_5th_Selected$MeanScore, ELA_06_AllG_5th_Selected$MeanScore_5, ELA_06_AllG_5th_Selected$L1Num, ELA_06_AllG_5th_Selected$L1Num_5, ELA_06_AllG_5th_Selected$L2Num, ELA_06_AllG_5th_Selected$L2Num_5, ELA_06_AllG_5th_Selected$L3Num, ELA_06_AllG_5th_Selected$L3Num_5, ELA_06_AllG_5th_Selected$L4Num, ELA_06_AllG_5th_Selected$L4Num_5, ELA_06_AllG_5th_Selected$L34Num, ELA_06_AllG_5th_Selected$L34Num_5, ELA_06_AllG_5th_Selected$L34Pct, ELA_06_AllG_5th_Selected$L34Pct_5, ELA_06_AllG_5th_Selected$Improv, ELA_06_AllG_5th_Selected$Improv_5)
+sapply(list_of_columns, class)
+```
+
+####8. Change the Class to Numeric
+Every column but "DBN" has to be numeric or integer. 
+```{r}
+ELA_06_AllG_5th_Selected$MeanScore <- ELA_06_AllG_5th_Selected$MeanScore$MS #This column was in fact a data frame. 
+ELA_06_AllG_5th_Selected$MeanScore5th <- as.numeric(levels(ELA_06_AllG_5th_Selected$MeanScore5th))[ELA_06_AllG_5th_Selected$MeanScore5th]
+ELA_06_AllG_5th_Selected$L1Num <- as.numeric(levels(ELA_06_AllG_5th_Selected$L1Num))[ELA_06_AllG_5th_Selected$L1Num]
+ELA_06_AllG_5th_Selected$L1Num5th <- as.numeric(levels(ELA_06_AllG_5th_Selected$L1Num5th))[ELA_06_AllG_5th_Selected$L1Num5th]
+ELA_06_AllG_5th_Selected$L2Num <- as.numeric(levels(ELA_06_AllG_5th_Selected$L2Num))[ELA_06_AllG_5th_Selected$L2Num]
+ELA_06_AllG_5th_Selected$L2Num5th <- as.numeric(levels(ELA_06_AllG_5th_Selected$L2Num5th))[ELA_06_AllG_5th_Selected$L2Num5th]
+ELA_06_AllG_5th_Selected$L3Num <- as.numeric(levels(ELA_06_AllG_5th_Selected$L3Num))[ELA_06_AllG_5th_Selected$L3Num]
+ELA_06_AllG_5th_Selected$L3Num5th <- as.numeric(levels(ELA_06_AllG_5th_Selected$L3Num5th))[ELA_06_AllG_5th_Selected$L3Num5th]
+ELA_06_AllG_5th_Selected$L4Num <- as.numeric(levels(ELA_06_AllG_5th_Selected$L4Num))[ELA_06_AllG_5th_Selected$L4Num]
+ELA_06_AllG_5th_Selected$L4Num5th <- as.numeric(levels(ELA_06_AllG_5th_Selected$L4Num5th))[ELA_06_AllG_5th_Selected$L4Num5th]
+ELA_06_AllG_5th_Selected$L34Num <- as.numeric(levels(ELA_06_AllG_5th_Selected$L34Num))[ELA_06_AllG_5th_Selected$L34Num]
+ELA_06_AllG_5th_Selected$L34Num5th <- as.numeric(levels(ELA_06_AllG_5th_Selected$L34Num5th))[ELA_06_AllG_5th_Selected$L34Num5th]
+ELA_06_AllG_5th_Selected$L34Pct <- as.numeric(levels(ELA_06_AllG_5th_Selected$L34Pct))[ELA_06_AllG_5th_Selected$L34Pct]
+ELA_06_AllG_5th_Selected$L34Pct5th <- as.numeric(levels(ELA_06_AllG_5th_Selected$L34Pct5th))[ELA_06_AllG_5th_Selected$L34Pct5th]
+```
+Check it again. 
+```{r}
+list_of_columns <- list(ELA_06_AllG_5th_Selected$DBN, ELA_06_AllG_5th_Selected$NumTest, ELA_06_AllG_5th_Selected$NumTest5th, ELA_06_AllG_5th_Selected$MeanScore, ELA_06_AllG_5th_Selected$MeanScore5th, ELA_06_AllG_5th_Selected$L1Num, ELA_06_AllG_5th_Selected$L1Num5th, ELA_06_AllG_5th_Selected$L2Num, ELA_06_AllG_5th_Selected$L2Num5th, ELA_06_AllG_5th_Selected$L3Num, ELA_06_AllG_5th_Selected$L3Num5th, ELA_06_AllG_5th_Selected$L4Num, ELA_06_AllG_5th_Selected$L4Num5th, ELA_06_AllG_5th_Selected$L34Num, ELA_06_AllG_5th_Selected$L34Num5th, ELA_06_AllG_5th_Selected$L34Pct, ELA_06_AllG_5th_Selected$L34Pct5th, ELA_06_AllG_5th_Selected$Improv, ELA_06_AllG_5th_Selected$Improv5th)
+sapply(list_of_columns, class)
+```
+
+####9. Save the Data Frame 
+```{r}
+write.csv(ELA_06_AllG_5th_Selected, "NYED_ELA_2006_Cleaned.csv")
+```
+
+####10. Repeat the Process
+From 2011, we do not need to compute the "MeanScore" for "All Grades"
+```{r}
+#2015
+ELA_15_AllG <- filter(ELA_2015, Grade=="All Grades")
+#Arrange the datasets by DBN just in case
+ELA_15_AllG <- arrange(ELA_15_AllG, DBN)
+dim(ELA_15_AllG)
+#Now, compute the "improvements"
+ELA_06_L34Pct <- select(ELA_06_AllG_5th_Selected, DBN, L34Pct)
+names(ELA_06_L34Pct) <- c("DBN", "L34Pct_06")
+ELA_15_AllG_Merged <- merge(ELA_15_AllG, ELA_06_L34Pct, by="DBN", all=TRUE)
+ELA_15_AllG_Merged$Improv_AllG <- round(as.numeric(as.character(ELA_15_AllG_Merged$L34Pct))-as.numeric(as.character(ELA_15_AllG_Merged$L34Pct_06)), digits=2)
+
+#Now, create the columns of 5th grade results
+ELA_15_5th_Filtered <- filter(ELA_2015, Grade=="5")
+ELA_15_5th_Arranged <- arrange(ELA_15_5th_Filtered, DBN)
+dim(ELA_15_5th_Arranged)
+#Get rid of unnecessary columns.
+ELA_15_5th_Reduced <- ELA_15_5th_Arranged[, -c(3,4)] #"Grade" and "Year" columns. 
+#Now, compute the "improvements"
+ELA_06_L34Pct5th <- select(ELA_06_AllG_5th_Selected, DBN, L34Pct5th)
+names(ELA_06_L34Pct5th) <- c("DBN", "L34Pct5th_06")
+ELA_15_5th_Merged <- merge(ELA_15_5th_Reduced, ELA_06_L34Pct5th, by="DBN", all=TRUE)
+ELA_15_5th_Merged$Improv5th <- round(as.numeric(as.character(ELA_15_5th_Merged$L34Pct))-as.numeric(as.character(ELA_15_5th_Merged$L34Pct5th_06)), digits=2)
+#Change names of the columns for the join. 
+names(ELA_15_5th_Merged) <- c("DBN", "School", "NumTest5th", "MeanScore5th", "L1Num5th", "L2Num5th", "L3Num5th", "L4Num5th", "L34Num5th", "L34Pct5th", "L34Pct5th_06", "Improv5th")
+ELA_15_AllG_5th <- merge(ELA_15_AllG_Merged, ELA_15_5th_Merged, by="DBN", all=TRUE)
+
+#Finally, we remove "Grade" and "Year" columns, and reorder/renames the columns. 
+ELA_15_AllG_5th_Selected <- select(ELA_15_AllG_5th, DBN, School.x, NumTest, NumTest5th, MeanScore, MeanScore5th, L1Num, L1Num5th, L2Num, L2Num5th, L3Num, L3Num5th, L4Num, L4Num5th, L34Num, L34Num5th, L34Pct, L34Pct5th, Improv_AllG, Improv5th)
+names(ELA_15_AllG_5th_Selected) <- c("DBN", "School", "NumTest", "NumTest5th", "MeanScore", "MeanScore5th", "L1Num", "L1Num5th", "L2Num", "L2Num5th", "L3Num", "L3Num5th", "L4Num", "L4Num5th", "L34Num", "L34Num5th", "L34Pct", "L34Pct5th", "Improv", "Improv5th")
+dim(ELA_15_AllG_5th_Selected)
+```
+Check if we need to change the class of the columns. 
+```{r}
+list_of_columns <- list(ELA_15_AllG_5th_Selected$DBN, ELA_15_AllG_5th_Selected$School, ELA_15_AllG_5th_Selected$NumTest, ELA_15_AllG_5th_Selected$NumTest5th, ELA_15_AllG_5th_Selected$MeanScore, ELA_15_AllG_5th_Selected$MeanScore5th, ELA_15_AllG_5th_Selected$L1Num, ELA_15_AllG_5th_Selected$L1Num5th, ELA_15_AllG_5th_Selected$L2Num, ELA_15_AllG_5th_Selected$L2Num5th, ELA_15_AllG_5th_Selected$L3Num, ELA_15_AllG_5th_Selected$L3Num5th, ELA_15_AllG_5th_Selected$L4Num, ELA_15_AllG_5th_Selected$L4Num5th, ELA_15_AllG_5th_Selected$L34Num, ELA_15_AllG_5th_Selected$L34Num5th, ELA_15_AllG_5th_Selected$L34Pct, ELA_15_AllG_5th_Selected$L34Pct5th, ELA_15_AllG_5th_Selected$Improv, ELA_15_AllG_5th_Selected$Improv5th)
+sapply(list_of_columns, class)
+```
+Every column but "DBN" has to be numeric or integer. 
+```{r}
+ELA_15_AllG_5th_Selected$MeanScore <- as.numeric(levels(ELA_15_AllG_5th_Selected$MeanScore))[ELA_15_AllG_5th_Selected$MeanScore]
+ELA_15_AllG_5th_Selected$MeanScore5th <- as.numeric(levels(ELA_15_AllG_5th_Selected$MeanScore5th))[ELA_15_AllG_5th_Selected$MeanScore5th]
+ELA_15_AllG_5th_Selected$L1Num <- as.numeric(levels(ELA_15_AllG_5th_Selected$L1Num))[ELA_15_AllG_5th_Selected$L1Num]
+ELA_15_AllG_5th_Selected$L1Num5th <- as.numeric(levels(ELA_15_AllG_5th_Selected$L1Num5th))[ELA_15_AllG_5th_Selected$L1Num5th]
+ELA_15_AllG_5th_Selected$L2Num <- as.numeric(levels(ELA_15_AllG_5th_Selected$L2Num))[ELA_15_AllG_5th_Selected$L2Num]
+ELA_15_AllG_5th_Selected$L2Num5th <- as.numeric(levels(ELA_15_AllG_5th_Selected$L2Num5th))[ELA_15_AllG_5th_Selected$L2Num5th]
+ELA_15_AllG_5th_Selected$L3Num <- as.numeric(levels(ELA_15_AllG_5th_Selected$L3Num))[ELA_15_AllG_5th_Selected$L3Num]
+ELA_15_AllG_5th_Selected$L3Num5th <- as.numeric(levels(ELA_15_AllG_5th_Selected$L3Num5th))[ELA_15_AllG_5th_Selected$L3Num5th]
+ELA_15_AllG_5th_Selected$L4Num <- as.numeric(levels(ELA_15_AllG_5th_Selected$L4Num))[ELA_15_AllG_5th_Selected$L4Num]
+ELA_15_AllG_5th_Selected$L4Num5th <- as.numeric(levels(ELA_15_AllG_5th_Selected$L4Num5th))[ELA_15_AllG_5th_Selected$L4Num5th]
+ELA_15_AllG_5th_Selected$L34Num <- as.numeric(levels(ELA_15_AllG_5th_Selected$L34Num))[ELA_15_AllG_5th_Selected$L34Num]
+ELA_15_AllG_5th_Selected$L34Num5th <- as.numeric(levels(ELA_15_AllG_5th_Selected$L34Num5th))[ELA_15_AllG_5th_Selected$L34Num5th]
+ELA_15_AllG_5th_Selected$L34Pct <- as.numeric(levels(ELA_15_AllG_5th_Selected$L34Pct))[ELA_15_AllG_5th_Selected$L34Pct]
+ELA_15_AllG_5th_Selected$L34Pct5th <- as.numeric(levels(ELA_15_AllG_5th_Selected$L34Pct5th))[ELA_15_AllG_5th_Selected$L34Pct5th]
+```
+Check it again. 
+```{r}
+list_of_columns <- list(ELA_15_AllG_5th_Selected$DBN, ELA_15_AllG_5th_Selected$School, ELA_15_AllG_5th_Selected$NumTest, ELA_15_AllG_5th_Selected$NumTest5th, ELA_15_AllG_5th_Selected$MeanScore, ELA_15_AllG_5th_Selected$MeanScore5th, ELA_15_AllG_5th_Selected$L1Num, ELA_15_AllG_5th_Selected$L1Num5th, ELA_15_AllG_5th_Selected$L2Num, ELA_15_AllG_5th_Selected$L2Num5th, ELA_15_AllG_5th_Selected$L3Num, ELA_15_AllG_5th_Selected$L3Num5th, ELA_15_AllG_5th_Selected$L4Num, ELA_15_AllG_5th_Selected$L4Num5th, ELA_15_AllG_5th_Selected$L34Num, ELA_15_AllG_5th_Selected$L34Num5th, ELA_15_AllG_5th_Selected$L34Pct, ELA_15_AllG_5th_Selected$L34Pct5th, ELA_15_AllG_5th_Selected$Improv, ELA_15_AllG_5th_Selected$Improv5th)
+sapply(list_of_columns, class)
+```
+Done!
+```{r}
+write.csv(ELA_15_AllG_5th_Selected, "NYED_ELA_2015_Cleaned.csv")
+#At the bottom of the datasets, there are about 100 school DBN rows that do not have any attributes. This is the result of merging "ELA_06" with "ELA_15" when calculating "Improvements". Obviously, some schools had been closed and others have been newly established over the years. 
+```
+
+#### Footnote:
+The original dataset is downloaded from the website:  
+http://schools.nyc.gov/Accountability/data/TestResults/ELAandMathTestResults  
+and  
+http://schools.nyc.gov/NR/exeres/05289E74-2D81-4CC0-81F6-E1143E28F4C4,frameless.htm  
+
+The dataset has information about the English Language Arts (ELA) test results of all the public schools in New York City from 3rd to 8th grade.  
+The excel file has several sheets and we will only use "All Student" spread sheet. 
