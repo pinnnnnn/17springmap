@@ -20,7 +20,11 @@ Winter break work:
 Date: 2017.1.24
 First week work:
   @Ibuki: 
+  
   > 1. Modify the NYC visualization app
+  
   @Pinn:
+  
   > 1. Finish combining the NYC data -- econ status
+  
   > 2. Create a plot visualization app
