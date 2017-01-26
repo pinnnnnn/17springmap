@@ -1,0 +1,154 @@
+---
+title: "Create NYC Data for app"
+author: "Peiyun Zhang"
+date: "May 6, 2016"
+output: html_document
+---
+
+
+This R markdown file will introduce the initial steps to create an interactive app and some heat maps color by attributes.
+
+First, we will merge the dataset into the shapefile
+####1A. Read the Precinct Polygon Shapefile
+```{r}
+if(!require(raster))install.packages("raster")
+library("raster") #merge (join shapefile and csv files)
+if(!require(maptools)) install.packages("maptools")
+library(maptools) #readShapeSpatial
+if(!require(dplyr))install.packages("dplyr")
+library("dplyr")
+
+NYC_PCT <- readShapeSpatial("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/New York/NYPD_Precinct_Shapefile/nypp")
+#Check the properties of the shapefile
+length(NYC_PCT)
+class(NYC_PCT)
+proj4string(NYC_PCT)
+names(NYC_PCT@data)
+#check the class of the key field (NHD_NUM)
+class(NYC_PCT@data$Precinct)
+```
+
+####2A. Read and Join the Attribute Dataset
+Read the dataframe that we are going to merge into the shapefile
+```{r}
+NYC_Census <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/New York/NYC_Census_Data_by_Precinct_2010.csv")
+
+names(NYC_Census)
+#We do not need "X.1" and "X" columns
+NYC_Census_Reduced <- NYC_Census[,-c(1,24)]
+names(NYC_Census_Reduced)
+
+NYC_Arrest <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/New York/NYPD_Arrest_2015.csv")
+
+names(NYC_Arrest)
+#We do not need "X" column
+NYC_Arrest_Reduced <- NYC_Arrest[,-1]
+names(NYC_Arrest_Reduced)
+
+
+NYC_Census_Arrest <- full_join(NYC_Census_Reduced, NYC_Arrest_Reduced, by = 'Precinct')
+```
+
+####3A. Choose Variables of Our Interests
+```{r}
+#In our example, we will choose "Population", "White", "Black", "Hispanic", "Unplyrate", and "PvtyUnplyrate" from NYC_Census_Reduced.
+#From NYC_Arrest_Reduced, we will choose "Arrest15", "Frisk15", "Search15", "Age", "Black", "White", "Asslt15", and "Homici15". 
+column0 <- NYC_Census_Arrest$Precinct
+
+column1 <- NYC_Census_Arrest$Population
+column2 <- NYC_Census_Arrest$White
+column3 <- NYC_Census_Arrest$Black
+column4 <- NYC_Census_Arrest$Hispanic
+column5 <- NYC_Census_Arrest$Unplyrate
+column6 <- NYC_Census_Arrest$PvtyUnplyrate
+
+column7 <- NYC_Census_Arrest$Arrest15
+column8 <- NYC_Census_Arrest$Frisk15
+column9 <- NYC_Census_Arrest$Search15
+column10 <- NYC_Census_Arrest$Age15
+column11 <- NYC_Census_Arrest$Black15
+column12 <- NYC_Census_Arrest$White15
+column13 <- NYC_Census_Arrest$Asslt15
+column14 <- NYC_Census_Arrest$Homici15
+
+NYC_Census_Arrest_Selected <- cbind.data.frame(column0, column1, column2, column3, column4, column5, column6, column7, column8, column9, column10, column11, column12, column13, column14)
+
+names(NYC_Census_Arrest_Selected) <- c("Precinct","Popultn","White","Black","Hispnc","UnplyR","PvUnplyR","Arrest15","Frisk15","Search15","Age15","Black15","White15","Asslt15","Homici15")
+```
+
+####4A. Merge and Write a New Shapefile
+```{r}
+NYC_PCT_Shape_Attribute <- merge(NYC_PCT, NYC_Census_Arrest_Selected, by = 'Precinct')
+#Check the result
+View(NYC_PCT_Shape_Attribute@data)
+
+proj4string(NYC_PCT_Shape_Attribute) <- CRS("+init=epsg:4326")
+
+writeSpatialShape(NYC_PCT_Shape_Attribute, "NYC_PCT_Shapefile_Selected")
+```
+
+
+####1B. Read the School Point Shapefile
+```{r}
+NYC_SCH <- readShapeSpatial ("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/New York/NYC_SCH_Shapefile/NYC_SCH_Shapefile")
+
+#Check the properties of the shapefile
+length(NYC_SCH)
+class(NYC_SCH)
+proj4string(NYC_SCH)
+names(NYC_SCH@data)
+
+#check the class of the key field (NYC_NUM)
+class(NYC_SCH@data$DBN)
+```
+
+####2B. Read the Attribute Dataset
+Read the dataframe that we are going to merge into the shapefile
+```{r}
+School_Data <- read.csv("/data/home/ogasawar17/graphics/MAP_16_Spring/Final/7. Clean Data 2015/New York/NYC_School_Data_2015.csv")
+
+names(School_Data)
+
+#We do not need "X" column
+School_Data_Reduced <- School_Data[,-1]
+names(School_Data_Reduced)
+
+class(School_Data_Reduced$DBN)
+```
+
+####3B. Choose Variables of Our Interests
+```{r}
+#In our example, we will choose "Total", "Black", "White", "Poverty", "MSELA", "MSMAT", "L34NmELA", "L34NmMAT", "TtlGrad4", and "DropOut4" from School_Data_Reduced.
+ 
+column0 <- School_Data_Reduced$DBN
+
+column1 <- School_Data_Reduced$Total
+column2 <- School_Data_Reduced$Black
+column3 <- School_Data_Reduced$White
+column4 <- School_Data_Reduced$Poverty
+column5 <- School_Data_Reduced$MSELA
+column6 <- School_Data_Reduced$MSMAT
+column7 <- School_Data_Reduced$L34NmELA
+column8 <- School_Data_Reduced$L34NmMAT
+column9 <- School_Data_Reduced$TtlGrad4
+column10 <- School_Data_Reduced$DropOut4
+
+School_Selected <- cbind.data.frame(column0, column1, column2, column3, column4, column5, column6, column7, column8, column9, column10)
+
+names(School_Selected) <- c("DBN","Total","Black","White","Poverty","MSELA","MSMAT","L34NmELA","L34NmMAT","TtlGrad4","DropOut4")
+```
+
+####3B. Merge and Write a New Shapefile
+```{r}
+NYC_SCH_Shape_Attribute <- merge(NYC_SCH, School_Selected, by='DBN')
+
+#The following count column is for counting the number of school in a precinct later on. 
+NYC_SCH_Shape_Attribute@data$counts <- rep(1, length(NYC_SCH_Shape_Attribute))
+
+#Check the result
+View(NYC_SCH_Shape_Attribute@data)
+
+proj4string(NYC_SCH_Shape_Attribute) <- CRS("+init=epsg:4326")
+
+writeSpatialShape(NYC_SCH_Shape_Attribute, "NYC_SCH_Shapefile_Selected")
+```
