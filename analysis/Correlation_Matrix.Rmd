@@ -5,20 +5,58 @@ date: "3/4/2017"
 output: html_document
 ---
 
-```{r}
 
+####0.Install required packages
+```{r}
+#"dplyr" package is used to do data cleaning and scraping
+if(!require(dplyr))
+    install.packages("dplyr")
+    require("dplyr")
+#"RCurl" package is used to read raw data from github
+if(!require(RCurl))
+    install.packages("RCurl")
+    require("RCurl")
+#"corrplot" package is used to read raw data from github
+if(!require(corrplot))
+    install.packages("corrplot")
+    require("corrplot")
 ```
 
 
-
+####1. Getting data ready
 ```{r}
+#Read rawdata from Github
+mydataURL <- getURL("https://raw.githubusercontent.com/pinnnnnn/17springmap/master/analysis/NYC_Data_Full_only_with_HalfMile.csv")
+#moCensus <- getURL("http://mcdc.missouri.edu/tmpscratch/06NOV16_00002.dexter/xtract.csv")
+rawdata <- read.csv(text = mydataURL)
+#subset by year 2015
+year15Data <- rawdata[c(45:54, 434:475, 855:896,949:954,1225:1254)]
 
+# delete.na <- function(DF, n=0) {
+#   DF[rowSums(is.na(DF)) <= n,]
+# }
+# year15DataReduced<-delete.na(year15Data)
 ```
 
 
-
+####2.Computing and visualization correlation
 ```{r}
+#Compute the correlation matrix by omitting all of the NA's.
+#Here is a problem: for some pair of variables, there only exist one observation for either or both variables. 
+# Therefore, there might be a problem of getting a std of 0.
+corrMatrix <- cor(year15Data, use="pairwise.complete.obs")
+corrMatrix[is.na(corrMatrix)] <- 0
+corrplot(corrMatrix, type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
 
+year15DataReduced <- select(year15Data, AsianStu15, BlackStu15, WhiteStu15, HispanicStu15, SWD15, Poverty15, ELAMeanScore3.15, ELAMeanScore8.15, MATMeanScore3.15, MATMeanScore8.15, TotalGrad4.15, DropOut4.15, FELONY15h, VIOLENT_CRIME15h, WHITE_COLLAR15h, COMPLETED15h)
+
+# Computing grad and drop out rate (did not finish because of NA)
+# year15DataReduced$DropOutRate15 <- year15DataReduced$DropOut4.15 / year15DataReduced$Total4.15
+# year15DataReduced$GradRate15 <- year15DataReduced$DropGrad4.15 / year15DataReduced$Total4.15
+
+corrMatrixReduced <- cor(year15DataReduced, use="pairwise.complete.obs")
+corrMatrixReduced[is.na(corrMatrixReduced)] <- 0
+corrplot(corrMatrixReduced, type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
 ```
 
 
